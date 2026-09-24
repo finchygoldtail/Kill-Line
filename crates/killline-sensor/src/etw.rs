@@ -96,7 +96,7 @@ fn device_map() -> Vec<(String, String)> {
     }
     // Longest device names first, so \device\harddiskvolume10 is not
     // matched by \device\harddiskvolume1.
-    out.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    out.sort_by_key(|a| std::cmp::Reverse(a.0.len()));
     out
 }
 
