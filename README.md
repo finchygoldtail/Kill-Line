@@ -61,6 +61,17 @@ sudo ./target/release/killline monitor --container my-agent --policy policies/no
 sudo ./target/release/killline run --policy policy.yaml --user 1000 -- python3 agent.py
 ```
 
+### Desktop app
+
+```sh
+desktop/build.sh                      # builds a .deb and an AppImage (Linux)
+sudo apt install ./desktop/src-tauri/target/release/bundle/deb/KillLine_0.1.0_amd64.deb
+```
+
+Launch **KillLine** from your applications menu. It asks for administrator permission (needed to load the kernel sensor), then opens the dashboard in its own window. It sends desktop notifications when an agent crosses a boundary. See [desktop/README.md](desktop/README.md).
+
+![KillLine desktop app](docs/demo/desktop-app.png)
+
 ### Dashboard
 
 ```sh

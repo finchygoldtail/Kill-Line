@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- **Desktop app** (`desktop/`, Tauri 2, Linux): asks for administrator permission through polkit, starts the bundled engine, and shows the dashboard in a native window. A navigation guard restricts the window to the engine's own address, and the dashboard page gets no Tauri API access. It sends native notifications for new breaches and for loss of visibility, and the engine stops when the app closes (even if the app is killed). Ships as a `.deb` (with a polkit policy) and an AppImage; `desktop/build.sh`.
+- `killline ui --announce-json --exit-with-stdin` for embedding.
 - **`killline ui`**: a local, offline, dark dashboard served by the killline binary on 127.0.0.1, protected by a token and host checks, with a strict CSP. It has session list and status panels, live stats, a live timeline with read bursts collapsed, and an "every breach" list with crossed/held results. Incident drawers show the pre-breach timeline, process tree and checksum verification. There is a sensor-coverage view; you can start monitoring a container or process with a policy template (validated live) and freeze, resume, terminate or stop an agent.
 - `killline inspect` collapses runs of similar file reads.
 - Operator control channel (`control.json`) and `resume` response; sessions record whether the agent is frozen.

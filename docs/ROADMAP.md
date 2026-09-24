@@ -35,7 +35,7 @@ The first milestone was: **prove we can independently detect a simple AI-agent c
 14. Kubernetes DaemonSet mode, possibly with a Tetragon or Falco sensor backend behind the existing `Observation` interface.
 15. Rootless Docker/Podman; arm64 CI.
 16. In-guest sensor for microVM sandboxes (Firecracker/Kata); gVisor integration via its own event stream.
-17. A local dashboard (TUI first; Tauri or web later) built on `session.json` and `timeline.jsonl`.
+17. ~~Local dashboard~~ (done: `killline ui`) and ~~Linux desktop app~~ (done: `desktop/`). Next: a tray icon with live status, signed packages, opt-in signed updates, and Windows (ETW sensor) and macOS (Endpoint Security) builds.
 
 ## Hygiene
 

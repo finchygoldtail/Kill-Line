@@ -89,6 +89,12 @@ enum Cmd {
         /// Open the dashboard in the default browser
         #[arg(long)]
         open: bool,
+        /// Print one JSON line {"url","port","token"} instead of the banner (for the desktop app)
+        #[arg(long, hide = true)]
+        announce_json: bool,
+        /// Exit when stdin closes (lets an unprivileged parent stop a root backend)
+        #[arg(long, hide = true)]
+        exit_with_stdin: bool,
     },
     /// Show the status panel of a session (default: most recent)
     Status {
@@ -212,7 +218,12 @@ fn run(cli: Cli, root: PathBuf) -> Result<i32> {
                 duration: None,
             })
         }
-        Cmd::Ui { port, open } => ui::serve(root, port, open),
+        Cmd::Ui {
+            port,
+            open,
+            announce_json,
+            exit_with_stdin,
+        } => ui::serve(root, port, open, announce_json, exit_with_stdin),
         Cmd::Status { session, watch } => views::status(&root, session.as_deref(), watch),
         Cmd::Sessions => views::sessions(&root),
         Cmd::Incidents => views::incidents(&root),

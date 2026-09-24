@@ -41,7 +41,13 @@ fn random_token() -> String {
     b.iter().map(|x| format!("{:02x}", x)).collect()
 }
 
-pub fn serve(root: PathBuf, port: u16, open: bool) -> Result<i32> {
+pub fn serve(
+    root: PathBuf,
+    port: u16,
+    open: bool,
+    announce_json: bool,
+    exit_with_stdin: bool,
+) -> Result<i32> {
     let server = Server::http(("127.0.0.1", port))
         .map_err(|e| anyhow!("cannot listen on 127.0.0.1:{}: {}", port, e))?;
     let port = server
@@ -55,10 +61,27 @@ pub fn serve(root: PathBuf, port: u16, open: bool) -> Result<i32> {
         port,
     };
     let url = format!("http://127.0.0.1:{}/#{}", port, ctx.token);
-    println!("KillLine dashboard running at:\n\n    {}\n", url);
-    println!("Local only (127.0.0.1). The link contains an access token; do not share it.");
-    println!("Data directory: {}", ctx.root.display());
-    println!("Press Ctrl+C to stop the dashboard. Running monitors keep running.");
+    if announce_json {
+        use std::io::Write;
+        println!(
+            "{}",
+            json!({"url": url, "port": port, "token": ctx.token, "data_dir": ctx.root.display().to_string()})
+        );
+        let _ = std::io::stdout().flush();
+    } else {
+        println!("KillLine dashboard running at:\n\n    {}\n", url);
+        println!("Local only (127.0.0.1). The link contains an access token; do not share it.");
+        println!("Data directory: {}", ctx.root.display());
+        println!("Press Ctrl+C to stop the dashboard. Running monitors keep running.");
+    }
+    if exit_with_stdin {
+        std::thread::spawn(|| {
+            let mut sink = [0u8; 64];
+            let mut stdin = std::io::stdin();
+            while matches!(stdin.read(&mut sink), Ok(n) if n > 0) {}
+            std::process::exit(0);
+        });
+    }
     if open {
         let _ = std::process::Command::new("xdg-open")
             .arg(&url)

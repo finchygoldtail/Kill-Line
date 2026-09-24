@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "KillLine",
+  "version": "0.1.0",
+  "identifier": "org.killline.desktop",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage"],
+    "category": "Utility",
+    "shortDescription": "Independent containment verification for AI agents",
+    "longDescription": "KillLine watches an AI agent from outside its sandbox using eBPF, compares what it does against a containment policy, and records a forensic timeline and incident bundle when it crosses a boundary. Local only: no cloud, no account, no telemetry.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png"
+    ],
+    "externalBin": ["binaries/killline"],
+    "linux": {
+      "deb": {
+        "depends": ["pkexec | policykit-1"],
+        "files": {
+          "/usr/share/polkit-1/actions/org.killline.dashboard.policy": "polkit/org.killline.dashboard.policy"
+        }
+      }
+    }
+  }
+}
