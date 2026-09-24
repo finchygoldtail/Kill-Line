@@ -1,0 +1,24 @@
+name: Feature request
+description: Propose a concrete improvement. Open-ended ideas are welcome in Discussions → Ideas.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What can't you verify or do today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Principles
+      options:
+        - label: This is defensive and does not need offensive capability.
+          required: true
+        - label: It keeps data on the user's machine by default.
+          required: true

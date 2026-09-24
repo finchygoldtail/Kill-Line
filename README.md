@@ -151,6 +151,14 @@ sudo test-lab/run-demo.sh 2   # RED (fake credential; SUCCEEDED)
 sudo test-lab/run-demo.sh 3   # AMBER (enumeration) → RED, with possible correlations
 ```
 
+## Community
+
+- **Questions, ideas, policies to share:** [Discussions](https://github.com/finchygoldtail/Kill-Line/discussions)
+- **Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md). False-positive reports are especially valuable.
+- **Security issues:** report privately; see [SECURITY.md](SECURITY.md).
+- **Sponsoring:** use the *Sponsor* button, which funds signing certificates, test hardware and maintenance.
+- **Verifying downloads:** [docs/SIGNING.md](docs/SIGNING.md).
+
 ## Documentation
 
 | | |
