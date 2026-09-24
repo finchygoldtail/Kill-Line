@@ -1,0 +1,39 @@
+# CODING AGENT: a project directory, package registries and GitHub.
+# Credentials are limited to an explicitly provided token file.
+version: 1
+agent: coding-agent
+name: coding-agent
+filesystem:
+  allow:
+    - /workspace/project
+  allow_write:
+    - /tmp
+    - ~/.cache
+  allow_read:
+    - ~/.gitconfig
+  deny:
+    - /var/run/secrets
+network:
+  mode: allowlist
+  allow:
+    - github.com
+    - "*.github.com"
+    - "*.githubusercontent.com"
+    - registry.npmjs.org
+    - pypi.org
+    - files.pythonhosted.org
+  allow_localhost: true
+processes:
+  allow: [git, node, npm, npx, python3, python, pip, bash, sh, make, cargo, rustc, cc, ld]
+  deny: [sudo, su, ssh, nc, ncat, socat, docker, kubectl]
+  deny_privileged: true
+credentials:
+  access: deny
+  allow_paths:
+    - /workspace/.agent-token   # the one credential this agent is given
+cloud_metadata:
+  access: deny
+container_runtime:
+  access: deny
+response:
+  violation: alert

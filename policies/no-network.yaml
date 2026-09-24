@@ -1,0 +1,54 @@
+# Demo policy: an agent confined to /workspace with no network access.
+version: 1
+agent: test-agent
+name: strict-no-network
+description: Workspace-only agent. No network, no credentials, no host access.
+
+filesystem:
+  allow_read:
+    - /workspace
+    - /app            # the agent's own code
+  allow_write:
+    - /workspace/output
+    - /tmp
+  deny:
+    - /root
+    - /home
+    - /etc/shadow
+    - /var/run/secrets
+
+network:
+  mode: deny
+
+processes:
+  allow:
+    - python3
+    - python
+  deny:
+    - sudo
+    - su
+    - ssh
+    - nc
+    - ncat
+    - socat
+  deny_privileged: true
+
+credentials:
+  access: deny
+  extra_paths:
+    - /fake-secrets
+
+cloud_metadata:
+  access: deny
+
+container_runtime:
+  access: deny
+
+inter_agent_communication:
+  allow: false
+
+untrusted_inputs:
+  - /workspace/untrusted
+
+response:
+  violation: alert

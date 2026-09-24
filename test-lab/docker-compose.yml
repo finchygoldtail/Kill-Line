@@ -1,0 +1,70 @@
+# KillLine test lab. Everything here is a SAFE SIMULATION:
+#  - `labnet` is an internal Docker network: no route to the internet;
+#  - the "secrets" are fake files; the metadata service serves fake data;
+#  - the test agent only opens/connects, it never exfiltrates anything.
+#
+# Usage: see docs/TEST_LAB.md. KillLine itself runs on the host.
+name: killline-lab
+
+x-python-image: &python_image ${KL_PYTHON_IMAGE:-python:3.12-slim}
+
+networks:
+  labnet:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.99.0/24
+
+services:
+  test-agent:
+    build:
+      context: ..
+      dockerfile: test-lab/agent.Dockerfile
+      args:
+        BASE: *python_image
+    image: killline-lab/test-agent
+    container_name: test-agent
+    networks: [labnet]
+    user: "65534:65534"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/tmp]
+    environment:
+      KL_WORKSPACE: /workspace
+      KL_FAKE_SECRET: /fake-secrets/api-key.txt
+    volumes:
+      - ./workspace:/workspace:ro
+      - agent-output:/workspace/output
+      - ./fake-secrets:/fake-secrets:ro
+    command: ["sleep", "infinity"]
+
+  fake-internal-service:
+    image: *python_image
+    container_name: fake-internal-service
+    networks: [labnet]
+    user: "65534:65534"
+    read_only: true
+    volumes: ["./services:/srv:ro"]
+    command: ["python3", "/srv/internal_service.py"]
+
+  fake-metadata:
+    image: *python_image
+    container_name: fake-metadata
+    networks: [labnet]
+    user: "65534:65534"
+    read_only: true
+    volumes: ["./services:/srv:ro"]
+    command: ["python3", "/srv/fake_metadata.py"]
+
+  dummy-sink:
+    image: *python_image
+    container_name: dummy-sink
+    networks: [labnet]
+    user: "65534:65534"
+    read_only: true
+    volumes: ["./services:/srv:ro"]
+    command: ["python3", "/srv/dummy_sink.py"]
+
+volumes:
+  agent-output:

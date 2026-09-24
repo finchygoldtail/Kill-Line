@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = ["crates/killline-core", "crates/killline-sensor", "crates/killline-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+# Licensing decision intentionally deferred (see README). Not yet licensed for redistribution.
+publish = false
+
+[workspace.dependencies]
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+sha2 = "0.10"
+hex = "0.4"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+libc = "0.2"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"

@@ -1,0 +1,29 @@
+# OFFLINE RESEARCH: reads and writes its workspace. No internet. No credentials.
+version: 1
+agent: research-agent
+name: offline-research
+filesystem:
+  allow:
+    - /workspace
+  allow_write:
+    - /tmp
+  deny:
+    - /root
+    - /home
+    - /var/run/secrets
+network:
+  mode: deny
+processes:
+  allow: [python3, python, bash, sh, cat, ls, grep, sed, awk, head, tail, wc, sort, find]
+  deny: [sudo, su, ssh, scp, nc, ncat, socat, curl, wget]
+  deny_privileged: true
+credentials:
+  access: deny
+cloud_metadata:
+  access: deny
+container_runtime:
+  access: deny
+untrusted_inputs:
+  - /workspace/untrusted
+response:
+  violation: alert
