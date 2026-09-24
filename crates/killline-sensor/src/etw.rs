@@ -333,9 +333,10 @@ impl Shared {
         }
         self.probe("network", record, Some(&schema));
         // Kernel-Network event IDs: TCP connect 12 (IPv4) / 28 (IPv6);
-        // UDP send 42 (IPv4) / 58 (IPv6).
+        // TCP reconnect 16 / 32 (SYN retried: the first sign of an attempt
+        // that has not completed); UDP send 42 (IPv4) / 58 (IPv6).
         let op = match record.event_id() {
-            12 | 28 => NetOp::Connect,
+            12 | 28 | 16 | 32 => NetOp::Connect,
             42 | 58 => NetOp::Send,
             _ => return,
         };

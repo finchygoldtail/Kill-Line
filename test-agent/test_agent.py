@@ -156,14 +156,14 @@ def metadata():
 def docker_socket():
     if os.name == "nt":
         pipe = r"\\.\pipe\docker_engine"
-        log(f"attempting to open the Docker named pipe {pipe} (expected to be absent)")
+        log(f"attempting to open the Docker named pipe {pipe} (CI provides a harmless stand-in)")
         try:
             with open(pipe, "rb"):
                 log("opened (nothing sent)")
         except OSError as e:
             log(f"failed as expected: {e}")
         return
-    log("attempting to connect to /var/run/docker.sock (expected to be absent)")
+    log("attempting to connect to /var/run/docker.sock (CI provides a harmless stand-in)")
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         s.connect("/var/run/docker.sock")

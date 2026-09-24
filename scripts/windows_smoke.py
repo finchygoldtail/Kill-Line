@@ -85,6 +85,17 @@ srv.bind(("127.0.0.1", 0))
 srv.listen(8)
 port = srv.getsockname()[1]
 
+# A harmless local stand-in for the Docker Engine named pipe, so the
+# container-runtime rule is exercised against a pipe that exists. It never
+# reads or answers anything. If Docker itself owns the pipe, use that.
+pipe_stub = None
+try:
+    from multiprocessing.connection import Listener
+    pipe_stub = Listener(r"\\.\pipe\docker_engine", family="AF_PIPE")
+    print("docker_engine pipe: local stand-in created")
+except OSError as e:
+    print(f"docker_engine pipe: stand-in not created ({e}); an existing pipe may be in use")
+
 
 def accept_loop():
     while True:
