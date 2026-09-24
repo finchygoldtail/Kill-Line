@@ -123,7 +123,13 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(session_id: &str, agent: &str, policy: &str, target: &str, response_mode: &str) -> Session {
+    pub fn new(
+        session_id: &str,
+        agent: &str,
+        policy: &str,
+        target: &str,
+        response_mode: &str,
+    ) -> Session {
         let now = Utc::now();
         Session {
             session_id: session_id.into(),
@@ -215,7 +221,9 @@ impl Session {
                 );
             }
             match &ev.observation {
-                Some(ObsKind::Exec { path, argv, sha256, .. }) => {
+                Some(ObsKind::Exec {
+                    path, argv, sha256, ..
+                }) => {
                     if let Some(r) = self.process_table.get_mut(&p.pid) {
                         r.exe = Some(path.clone());
                         r.argv = argv.clone();

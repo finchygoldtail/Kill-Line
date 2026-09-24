@@ -26,7 +26,11 @@ extern "C" fn on_signal(_: libc::c_int) {
 pub enum Target {
     Container(String),
     Pid(u32),
-    Launch { command: Vec<String>, uid: Option<u32>, gid: Option<u32> },
+    Launch {
+        command: Vec<String>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+    },
 }
 
 pub struct Options {
@@ -47,15 +51,27 @@ fn session_id() -> String {
         use std::io::Read;
         let _ = f.read_exact(&mut b);
     }
-    format!("{}-{}", Utc::now().format("%Y%m%d-%H%M%S"), b.iter().map(|x| format!("{:02x}", x)).collect::<String>())
+    format!(
+        "{}-{}",
+        Utc::now().format("%Y%m%d-%H%M%S"),
+        b.iter().map(|x| format!("{:02x}", x)).collect::<String>()
+    )
 }
 
 fn system_metadata(session: &Session, head: &str) -> serde_json::Value {
-    let read = |p: &str| std::fs::read_to_string(p).map(|s| s.trim().to_string()).unwrap_or_default();
+    let read = |p: &str| {
+        std::fs::read_to_string(p)
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default()
+    };
     let os = read("/etc/os-release")
         .lines()
         .find(|l| l.starts_with("PRETTY_NAME="))
-        .map(|l| l.trim_start_matches("PRETTY_NAME=").trim_matches('"').to_string())
+        .map(|l| {
+            l.trim_start_matches("PRETTY_NAME=")
+                .trim_matches('"')
+                .to_string()
+        })
         .unwrap_or_default();
     serde_json::json!({
         "killline_version": killline_core::VERSION,
@@ -74,7 +90,8 @@ fn system_metadata(session: &Session, head: &str) -> serde_json::Value {
 }
 
 pub fn run(opts: Options) -> Result<i32> {
-    let policy_text = std::fs::read_to_string(&opts.policy).with_context(|| format!("reading {}", opts.policy.display()))?;
+    let policy_text = std::fs::read_to_string(&opts.policy)
+        .with_context(|| format!("reading {}", opts.policy.display()))?;
     let policy = Policy::load(&opts.policy)?;
     let compiled = policy.compile()?;
     let response = opts.response.unwrap_or(policy.response.violation);
@@ -86,20 +103,41 @@ pub fn run(opts: Options) -> Result<i32> {
             let c = target::docker_container(name)?;
             let pids = target::pids_in_ns(c.pidns);
             let label = format!("container:{} ({})", c.name, &c.id[..12]);
-            (Scope { pids, pidns: Some(c.pidns) }, Handle::Container(c.id.clone()), label, c.init_pid)
+            (
+                Scope {
+                    pids,
+                    pidns: Some(c.pidns),
+                },
+                Handle::Container(c.id.clone()),
+                label,
+                c.init_pid,
+            )
         }
         Target::Pid(pid) => {
             let pids = target::pid_tree(*pid);
             if !std::path::Path::new(&format!("/proc/{}", pid)).exists() {
                 anyhow::bail!("no process {}", pid);
             }
-            (Scope { pids, pidns: None }, Handle::Pids, format!("process:{}", pid), *pid)
+            (
+                Scope { pids, pidns: None },
+                Handle::Pids,
+                format!("process:{}", pid),
+                *pid,
+            )
         }
         Target::Launch { command, uid, gid } => {
             let l = launch::spawn(command, *uid, *gid)?;
             let pid = l.child.id();
             launched = Some(l);
-            (Scope { pids: vec![pid], pidns: None }, Handle::Pids, format!("run:{}", command.join(" ")), pid)
+            (
+                Scope {
+                    pids: vec![pid],
+                    pidns: None,
+                },
+                Handle::Pids,
+                format!("run:{}", command.join(" ")),
+                pid,
+            )
         }
     };
 
@@ -116,7 +154,13 @@ pub fn run(opts: Options) -> Result<i32> {
     let sid = session_id();
     private_dir(&opts.root)?;
     let mut store = SessionStore::create(&opts.root, &sid, &policy_text)?;
-    let mut session = Session::new(&sid, &policy.agent, &policy.display_name(), &target_label, &format!("{:?}", response).to_lowercase());
+    let mut session = Session::new(
+        &sid,
+        &policy.agent,
+        &policy.display_name(),
+        &target_label,
+        &format!("{:?}", response).to_lowercase(),
+    );
     session.coverage = sensor.coverage().to_vec();
     let mut engine = Engine::new(compiled, &sid, Some(std::process::id()));
 
@@ -129,8 +173,16 @@ pub fn run(opts: Options) -> Result<i32> {
     let mut out_events: Vec<Event> = Vec::new();
     for c in sensor.coverage().to_vec() {
         if !c.active {
-            let sev = if c.critical { Severity::High } else { Severity::Low };
-            let msg = format!("Telemetry source {} is {}", c.name, c.detail.clone().unwrap_or_default());
+            let sev = if c.critical {
+                Severity::High
+            } else {
+                Severity::Low
+            };
+            let msg = format!(
+                "Telemetry source {} is {}",
+                c.name,
+                c.detail.clone().unwrap_or_default()
+            );
             if c.critical {
                 session.degrade(msg.clone());
             }
@@ -141,15 +193,43 @@ pub fn run(opts: Options) -> Result<i32> {
         Category::Monitor,
         "monitor.started",
         Severity::Info,
-        format!("KillLine monitoring started for {} with policy {}. Tracking {} process(es).", target_label, policy.display_name(), scope.pids.len()),
+        format!(
+            "KillLine monitoring started for {} with policy {}. Tracking {} process(es).",
+            target_label,
+            policy.display_name(),
+            scope.pids.len()
+        ),
     ));
 
     views::banner_start(&session, &opts.policy.display().to_string());
+    if policy.response.on_degraded != ResponseAction::Alert {
+        use std::io::Write;
+        let _ = writeln!(
+            std::io::stdout(),
+            "Fail-closed: the agent will be {} if KillLine loses visibility (dropped events).\n",
+            if policy.response.on_degraded == ResponseAction::Freeze {
+                "frozen"
+            } else {
+                "terminated"
+            }
+        );
+    }
     for c in sensor.coverage() {
         if !c.active {
             let color = if c.critical { views::RED } else { views::DIM };
             use std::io::Write;
-            let _ = writeln!(std::io::stdout(), "{}", paint(&format!("  coverage: {} — {}", c.name, c.detail.as_deref().unwrap_or("")), color));
+            let _ = writeln!(
+                std::io::stdout(),
+                "{}",
+                paint(
+                    &format!(
+                        "  coverage: {} — {}",
+                        c.name,
+                        c.detail.as_deref().unwrap_or("")
+                    ),
+                    color
+                )
+            );
         }
     }
 
@@ -163,6 +243,8 @@ pub fn run(opts: Options) -> Result<i32> {
     let mut recent: VecDeque<Event> = VecDeque::new();
     let mut pending: Vec<PendingIncident> = Vec::new();
     let mut responded = false;
+    let mut responded_degraded = false;
+    let on_degraded = policy.response.on_degraded;
     let mut obs = Vec::new();
     let mut last_status = session.status;
     let mut exit_reason = "stopped by user".to_string();
@@ -185,19 +267,39 @@ pub fn run(opts: Options) -> Result<i32> {
             if is_new_violation {
                 // One incident per distinct breach; repeats go to the timeline
                 // and into the open incident's post-trigger context.
-                let key = format!("{:?}|{:?}|{}", ev.category, ev.policy_rule, ev.resource_summary());
+                let key = format!(
+                    "{:?}|{:?}|{}",
+                    ev.category,
+                    ev.policy_rule,
+                    ev.resource_summary()
+                );
                 if !reported.insert(key) {
                     views::repeat_line(&ev);
                 } else if session.incidents.len() < MAX_INCIDENTS_PER_SESSION {
                     store.flush()?;
-                    let inc = PendingIncident::new(&opts.root, &session, &ev, recent.iter().cloned().collect(), store.head())?;
+                    let inc = PendingIncident::new(
+                        &opts.root,
+                        &session,
+                        &ev,
+                        recent.iter().cloned().collect(),
+                        store.head(),
+                    )?;
                     let id = inc.incident.incident_id.clone();
                     session.incidents.push(id.clone());
-                    inc.write(&session, &policy_text, &system_metadata(&session, store.head()))?;
+                    inc.write(
+                        &session,
+                        &policy_text,
+                        &system_metadata(&session, store.head()),
+                    )?;
                     views::alert_block(&session, &ev, &response, &id);
                     pending.push(inc);
                 } else {
-                    views::alert_block(&session, &ev, &response, "(incident limit reached; see timeline)");
+                    views::alert_block(
+                        &session,
+                        &ev,
+                        &response,
+                        "(incident limit reached; see timeline)",
+                    );
                 }
             }
             if ev.verdict == Verdict::Anomaly {
@@ -215,13 +317,42 @@ pub fn run(opts: Options) -> Result<i32> {
             };
             let (sev, msg) = match result {
                 Ok(m) => (Severity::Info, format!("Response executed: {}.", m)),
-                Err(e) => (Severity::High, format!("Response FAILED: {:#}. The agent is still running.", e)),
+                Err(e) => (
+                    Severity::High,
+                    format!("Response FAILED: {:#}. The agent is still running.", e),
+                ),
             };
             session.response_taken.push(msg.clone());
             out_events.push(engine.notice(Category::Response, "response.executed", sev, msg));
             continue;
         }
 
+        // Fail-closed option: act when visibility is lost.
+        if !responded_degraded && session.dropped_events > 0 && on_degraded != ResponseAction::Alert
+        {
+            responded_degraded = true;
+            let pids = || sensor.tracked_pids().unwrap_or_default();
+            let result = match on_degraded {
+                ResponseAction::Freeze => respond::freeze(&handle, &pids),
+                ResponseAction::Terminate => respond::terminate(&handle, &pids),
+                ResponseAction::Alert => unreachable!(),
+            };
+            let msg = match result {
+                Ok(m) => format!(
+                    "Visibility lost (dropped events); response.on_degraded executed: {}.",
+                    m
+                ),
+                Err(e) => format!("Visibility lost; response.on_degraded FAILED: {:#}.", e),
+            };
+            session.response_taken.push(msg.clone());
+            out_events.push(engine.notice(
+                Category::Response,
+                "response.on_degraded",
+                Severity::High,
+                msg,
+            ));
+            continue;
+        }
         if session.status != last_status {
             if session.status != Status::Red {
                 views::status_change(&session);
@@ -256,7 +387,12 @@ pub fn run(opts: Options) -> Result<i32> {
                 );
                 session.dropped_events = drops;
                 session.degrade(format!("{} events dropped (ring buffer full)", drops));
-                out_events.push(engine.notice(Category::Monitor, "monitor.events_dropped", Severity::High, msg));
+                out_events.push(engine.notice(
+                    Category::Monitor,
+                    "monitor.events_dropped",
+                    Severity::High,
+                    msg,
+                ));
                 last_drops = drops;
             }
             // Finalise incidents whose post-trigger window has elapsed.
@@ -267,7 +403,11 @@ pub fn run(opts: Options) -> Result<i32> {
                     let p = pending.remove(i);
                     let mut p = p;
                     p.incident.finalized = true;
-                    p.write(&session, &policy_text, &system_metadata(&session, store.head()))?;
+                    p.write(
+                        &session,
+                        &policy_text,
+                        &system_metadata(&session, store.head()),
+                    )?;
                 } else {
                     i += 1;
                 }
@@ -296,13 +436,22 @@ pub fn run(opts: Options) -> Result<i32> {
     }
 
     // Shutdown: record, finalise, report.
-    let ev = engine.notice(Category::Monitor, "monitor.stopped", Severity::Info, format!("KillLine monitoring stopped: {}.", exit_reason));
+    let ev = engine.notice(
+        Category::Monitor,
+        "monitor.stopped",
+        Severity::Info,
+        format!("KillLine monitoring stopped: {}.", exit_reason),
+    );
     session.apply(&ev);
     store.append(&ev)?;
     for mut p in pending.drain(..) {
         p.after.push(ev.clone());
         p.incident.finalized = true;
-        p.write(&session, &policy_text, &system_metadata(&session, store.head()))?;
+        p.write(
+            &session,
+            &policy_text,
+            &system_metadata(&session, store.head()),
+        )?;
     }
     session.ended = Some(Utc::now());
     session.heartbeat = Utc::now();

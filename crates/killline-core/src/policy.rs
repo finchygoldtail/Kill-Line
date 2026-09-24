@@ -2,7 +2,7 @@
 //!
 //! See docs/POLICY_FORMAT.md for the full reference.
 
-use crate::pathmatch;
+use crate::pathmatch::{self, PatternSet};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
@@ -151,7 +151,11 @@ pub struct ProcessPolicy {
 
 impl Default for ProcessPolicy {
     fn default() -> Self {
-        ProcessPolicy { allow: vec![], deny: vec![], deny_privileged: true }
+        ProcessPolicy {
+            allow: vec![],
+            deny: vec![],
+            deny_privileged: true,
+        }
     }
 }
 
@@ -216,6 +220,11 @@ pub enum ResponseAction {
 pub struct ResponsePolicy {
     #[serde(default)]
     pub violation: ResponseAction,
+    /// What to do when KillLine loses visibility (dropped events). `freeze`
+    /// makes monitoring fail closed: an agent cannot flood its way out of
+    /// view. Default: alert.
+    #[serde(default)]
+    pub on_degraded: ResponseAction,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -310,15 +319,24 @@ pub const RUNTIME_SOCKETS: &[&str] = &[
 /// Paths whose access from inside an agent sandbox is a recognised container
 /// escape *indicator*. This is a detection list only.
 pub const ESCAPE_INDICATORS: &[(&str, &str)] = &[
-    ("/proc/sys/kernel/core_pattern", "kernel core_pattern handler (runs on the host)"),
+    (
+        "/proc/sys/kernel/core_pattern",
+        "kernel core_pattern handler (runs on the host)",
+    ),
     ("/proc/sysrq-trigger", "kernel SysRq trigger"),
     ("/proc/sys/kernel/modprobe", "kernel modprobe helper path"),
     ("/proc/*/root", "another process's root filesystem"),
     ("/proc/*/mem", "another process's memory"),
     ("/proc/kcore", "kernel memory image"),
     ("/proc/kallsyms", "kernel symbol table"),
-    ("/sys/fs/cgroup/**/release_agent", "cgroup release_agent (host-side helper)"),
-    ("/sys/fs/cgroup/**/notify_on_release", "cgroup release notification"),
+    (
+        "/sys/fs/cgroup/**/release_agent",
+        "cgroup release_agent (host-side helper)",
+    ),
+    (
+        "/sys/fs/cgroup/**/notify_on_release",
+        "cgroup release notification",
+    ),
     ("/sys/kernel/uevent_helper", "kernel uevent helper"),
     ("/dev/mem", "physical memory device"),
     ("/dev/kmem", "kernel memory device"),
@@ -397,12 +415,21 @@ pub const RUNTIME_READ_PATHS: &[&str] = &[
 ];
 
 /// Paths every program may write regardless of policy.
-pub const RUNTIME_WRITE_PATHS: &[&str] =
-    &["/dev/null", "/dev/tty", "/dev/pts", "/dev/stdout", "/dev/stderr", "/dev/fd"];
+pub const RUNTIME_WRITE_PATHS: &[&str] = &[
+    "/dev/null",
+    "/dev/tty",
+    "/dev/pts",
+    "/dev/stdout",
+    "/dev/stderr",
+    "/dev/fd",
+];
 
 /// Well-known cloud instance-metadata endpoints.
 pub const METADATA_IPS: &[(&str, &str)] = &[
-    ("169.254.169.254", "AWS / Azure / GCP / OCI instance metadata"),
+    (
+        "169.254.169.254",
+        "AWS / Azure / GCP / OCI instance metadata",
+    ),
     ("fd00:ec2::254", "AWS instance metadata (IPv6)"),
     ("169.254.170.2", "AWS ECS task metadata / credentials"),
     ("169.254.170.23", "AWS EKS Pod Identity agent"),
@@ -422,13 +449,16 @@ pub const METADATA_HOSTS: &[&str] = &[
 #[derive(Debug, Clone)]
 pub struct CompiledPolicy {
     pub source: Policy,
-    pub read_allow: Vec<String>,
-    pub write_allow: Vec<String>,
-    pub deny: Vec<String>,
-    pub runtime_read: Vec<String>,
-    pub credential_paths: Vec<String>,
-    pub credential_allow: Vec<String>,
-    pub untrusted: Vec<String>,
+    pub read_allow: PatternSet,
+    pub write_allow: PatternSet,
+    pub deny: PatternSet,
+    pub runtime_read: PatternSet,
+    pub runtime_write: PatternSet,
+    pub credential_paths: PatternSet,
+    pub credential_allow: PatternSet,
+    pub untrusted: PatternSet,
+    pub escape_indicators: PatternSet,
+    pub runtime_sockets: PatternSet,
     pub cidrs: Vec<Cidr>,
     pub domains: Vec<String>,
     pub network_mode: NetworkMode,
@@ -436,11 +466,16 @@ pub struct CompiledPolicy {
 
 impl Policy {
     pub fn load(path: &Path) -> Result<Policy> {
-        let meta = std::fs::metadata(path).with_context(|| format!("reading {}", path.display()))?;
+        let meta =
+            std::fs::metadata(path).with_context(|| format!("reading {}", path.display()))?;
         if meta.len() > MAX_POLICY_BYTES {
-            bail!("policy file is larger than {} bytes; refusing to parse", MAX_POLICY_BYTES);
+            bail!(
+                "policy file is larger than {} bytes; refusing to parse",
+                MAX_POLICY_BYTES
+            );
         }
-        let text = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        let text =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         Policy::parse(&text)
     }
 
@@ -457,13 +492,22 @@ impl Policy {
     pub fn validate(&self) -> Vec<Diagnostic> {
         let mut d = Vec::new();
         if self.version != 1 {
-            d.push(Diagnostic::error(format!("unsupported policy version {}", self.version)));
+            d.push(Diagnostic::error(format!(
+                "unsupported policy version {}",
+                self.version
+            )));
         }
         if self.agent.trim().is_empty() {
             d.push(Diagnostic::error("`agent` must not be empty"));
         }
-        if !self.agent.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)) {
-            d.push(Diagnostic::error("`agent` may only contain letters, digits, '-', '_' and '.'"));
+        if !self
+            .agent
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
+        {
+            d.push(Diagnostic::error(
+                "`agent` may only contain letters, digits, '-', '_' and '.'",
+            ));
         }
         let lists: Vec<(&str, &Vec<String>)> = vec![
             ("filesystem.allow", &self.filesystem.allow),
@@ -491,7 +535,10 @@ impl Policy {
         check_list(&mut d, "processes.deny", &self.processes.deny);
         for c in &self.network.allow_cidr {
             if Cidr::parse(c).is_none() {
-                d.push(Diagnostic::error(format!("network.allow_cidr: '{}' is not a valid CIDR", c)));
+                d.push(Diagnostic::error(format!(
+                    "network.allow_cidr: '{}' is not a valid CIDR",
+                    c
+                )));
             }
         }
         for dom in &self.network.allow {
@@ -501,12 +548,19 @@ impl Policy {
                     .chars()
                     .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.');
             if !valid {
-                d.push(Diagnostic::error(format!("network.allow: '{}' is not a valid domain", dom)));
+                d.push(Diagnostic::error(format!(
+                    "network.allow: '{}' is not a valid domain",
+                    dom
+                )));
             }
         }
         let mode = self.network.effective_mode();
-        if mode == NetworkMode::Deny && (!self.network.allow.is_empty() || !self.network.allow_cidr.is_empty()) {
-            d.push(Diagnostic::error("network.mode is `deny` but allow rules are present"));
+        if mode == NetworkMode::Deny
+            && (!self.network.allow.is_empty() || !self.network.allow_cidr.is_empty())
+        {
+            d.push(Diagnostic::error(
+                "network.mode is `deny` but allow rules are present",
+            ));
         }
         if mode == NetworkMode::Allowlist && !self.network.allow.is_empty() {
             d.push(Diagnostic::warning(
@@ -516,7 +570,9 @@ impl Policy {
             ));
         }
         if mode == NetworkMode::Allow {
-            d.push(Diagnostic::warning("network.mode is `allow`: outbound traffic is not a boundary"));
+            d.push(Diagnostic::warning(
+                "network.mode is `allow`: outbound traffic is not a boundary",
+            ));
         }
         if self.filesystem.allow.is_empty()
             && self.filesystem.allow_read.is_empty()
@@ -527,7 +583,9 @@ impl Policy {
             ));
         }
         if self.credentials.access == Access::Allow {
-            d.push(Diagnostic::warning("credentials.access is `allow`: credential reads are not a boundary"));
+            d.push(Diagnostic::warning(
+                "credentials.access is `allow`: credential reads are not a boundary",
+            ));
         }
         if self.cloud_metadata.access == Access::Allow {
             d.push(Diagnostic::warning("cloud_metadata.access is `allow`"));
@@ -562,21 +620,31 @@ impl Policy {
     }
 
     pub fn compile(&self) -> Result<CompiledPolicy> {
-        let errors: Vec<_> = self.validate().into_iter().filter(|d| d.level == Level::Error).collect();
+        let errors: Vec<_> = self
+            .validate()
+            .into_iter()
+            .filter(|d| d.level == Level::Error)
+            .collect();
         if !errors.is_empty() {
             bail!(
                 "policy is invalid:\n{}",
-                errors.iter().map(|e| format!("  - {}", e.message)).collect::<Vec<_>>().join("\n")
+                errors
+                    .iter()
+                    .map(|e| format!("  - {}", e.message))
+                    .collect::<Vec<_>>()
+                    .join("\n")
             );
         }
-        let expand = |v: &[String]| -> Vec<String> { v.iter().flat_map(|p| pathmatch::expand_home(p)).collect() };
+        let expand = |v: &[String]| -> Vec<String> {
+            v.iter().flat_map(|p| pathmatch::expand_home(p)).collect()
+        };
         let mut read_allow = expand(&self.filesystem.allow);
         read_allow.extend(expand(&self.filesystem.allow_read));
         let mut write_allow = expand(&self.filesystem.allow);
         write_allow.extend(expand(&self.filesystem.allow_write));
         // Writable implies readable.
         read_allow.extend(write_allow.clone());
-        let runtime_read = match self.filesystem.runtime_read {
+        let runtime_read: Vec<String> = match self.filesystem.runtime_read {
             RuntimeRead::Default => RUNTIME_READ_PATHS.iter().map(|s| s.to_string()).collect(),
             RuntimeRead::None => vec![],
         };
@@ -587,15 +655,28 @@ impl Policy {
         credential_paths.extend(expand(&self.credentials.extra_paths));
         Ok(CompiledPolicy {
             source: self.clone(),
-            read_allow,
-            write_allow,
-            deny: expand(&self.filesystem.deny),
-            runtime_read,
-            credential_paths,
-            credential_allow: expand(&self.credentials.allow_paths),
-            untrusted: expand(&self.untrusted_inputs),
-            cidrs: self.network.allow_cidr.iter().filter_map(|c| Cidr::parse(c)).collect(),
-            domains: self.network.allow.iter().map(|d| d.to_ascii_lowercase()).collect(),
+            read_allow: PatternSet::new(read_allow),
+            write_allow: PatternSet::new(write_allow),
+            deny: PatternSet::new(expand(&self.filesystem.deny)),
+            runtime_read: PatternSet::new(runtime_read),
+            runtime_write: PatternSet::new(RUNTIME_WRITE_PATHS.iter()),
+            credential_paths: PatternSet::new(credential_paths),
+            credential_allow: PatternSet::new(expand(&self.credentials.allow_paths)),
+            untrusted: PatternSet::new(expand(&self.untrusted_inputs)),
+            escape_indicators: PatternSet::new(ESCAPE_INDICATORS.iter().map(|(p, _)| *p)),
+            runtime_sockets: PatternSet::new(RUNTIME_SOCKETS.iter()),
+            cidrs: self
+                .network
+                .allow_cidr
+                .iter()
+                .filter_map(|c| Cidr::parse(c))
+                .collect(),
+            domains: self
+                .network
+                .allow
+                .iter()
+                .map(|d| d.to_ascii_lowercase())
+                .collect(),
             network_mode: self.network.effective_mode(),
         })
     }
@@ -607,14 +688,23 @@ impl Policy {
 
 fn check_list(d: &mut Vec<Diagnostic>, name: &str, list: &[String]) {
     if list.len() > MAX_LIST_ENTRIES {
-        d.push(Diagnostic::error(format!("{} has more than {} entries", name, MAX_LIST_ENTRIES)));
+        d.push(Diagnostic::error(format!(
+            "{} has more than {} entries",
+            name, MAX_LIST_ENTRIES
+        )));
     }
     for e in list {
         if e.len() > MAX_ENTRY_LEN {
-            d.push(Diagnostic::error(format!("{}: entry longer than {} bytes", name, MAX_ENTRY_LEN)));
+            d.push(Diagnostic::error(format!(
+                "{}: entry longer than {} bytes",
+                name, MAX_ENTRY_LEN
+            )));
         }
         if e.chars().any(|c| c.is_control()) {
-            d.push(Diagnostic::error(format!("{}: entry contains control characters", name)));
+            d.push(Diagnostic::error(format!(
+                "{}: entry contains control characters",
+                name
+            )));
         }
     }
 }
@@ -635,13 +725,22 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     fn error(m: impl Into<String>) -> Self {
-        Diagnostic { level: Level::Error, message: m.into() }
+        Diagnostic {
+            level: Level::Error,
+            message: m.into(),
+        }
     }
     fn warning(m: impl Into<String>) -> Self {
-        Diagnostic { level: Level::Warning, message: m.into() }
+        Diagnostic {
+            level: Level::Warning,
+            message: m.into(),
+        }
     }
     fn info(m: impl Into<String>) -> Self {
-        Diagnostic { level: Level::Info, message: m.into() }
+        Diagnostic {
+            level: Level::Info,
+            message: m.into(),
+        }
     }
 }
 
@@ -672,11 +771,19 @@ impl Cidr {
     pub fn contains(&self, ip: &IpAddr) -> bool {
         match (self.addr, ip) {
             (IpAddr::V4(net), IpAddr::V4(ip)) => {
-                let mask = if self.prefix == 0 { 0 } else { u32::MAX << (32 - self.prefix) };
+                let mask = if self.prefix == 0 {
+                    0
+                } else {
+                    u32::MAX << (32 - self.prefix)
+                };
                 (u32::from(net) & mask) == (u32::from(*ip) & mask)
             }
             (IpAddr::V6(net), IpAddr::V6(ip)) => {
-                let mask = if self.prefix == 0 { 0 } else { u128::MAX << (128 - self.prefix) };
+                let mask = if self.prefix == 0 {
+                    0
+                } else {
+                    u128::MAX << (128 - self.prefix)
+                };
                 (u128::from(net) & mask) == (u128::from(*ip) & mask)
             }
             _ => false,
@@ -686,11 +793,26 @@ impl Cidr {
 
 /// Bundled policy templates.
 pub const TEMPLATES: &[(&str, &str)] = &[
-    ("offline-research", include_str!("../../../policies/offline-research.yaml")),
-    ("coding-agent", include_str!("../../../policies/coding-agent.yaml")),
-    ("untrusted-model-test", include_str!("../../../policies/untrusted-model-test.yaml")),
-    ("model-evaluation", include_str!("../../../policies/model-evaluation.yaml")),
-    ("no-network", include_str!("../../../policies/no-network.yaml")),
+    (
+        "offline-research",
+        include_str!("../../../policies/offline-research.yaml"),
+    ),
+    (
+        "coding-agent",
+        include_str!("../../../policies/coding-agent.yaml"),
+    ),
+    (
+        "untrusted-model-test",
+        include_str!("../../../policies/untrusted-model-test.yaml"),
+    ),
+    (
+        "model-evaluation",
+        include_str!("../../../policies/model-evaluation.yaml"),
+    ),
+    (
+        "no-network",
+        include_str!("../../../policies/no-network.yaml"),
+    ),
 ];
 
 #[cfg(test)]

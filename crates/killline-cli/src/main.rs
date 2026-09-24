@@ -129,7 +129,9 @@ enum Cmd {
 
 fn main() {
     let cli = Cli::parse();
-    views::set_color(!cli.no_color && std::env::var_os("NO_COLOR").is_none() && unsafe { libc::isatty(1) } == 1);
+    views::set_color(
+        !cli.no_color && std::env::var_os("NO_COLOR").is_none() && unsafe { libc::isatty(1) } == 1,
+    );
     let root = cli.data_dir.clone().unwrap_or_else(store::data_dir);
     let code = match run(cli, root) {
         Ok(c) => c,
@@ -143,22 +145,49 @@ fn main() {
 
 fn run(cli: Cli, root: PathBuf) -> Result<i32> {
     match cli.cmd {
-        Cmd::Monitor { container, pid, policy, response, verbose, duration } => {
+        Cmd::Monitor {
+            container,
+            pid,
+            policy,
+            response,
+            verbose,
+            duration,
+        } => {
             let target = match (container, pid) {
                 (Some(c), None) => monitor::Target::Container(c),
                 (None, Some(p)) => monitor::Target::Pid(p),
                 _ => bail!("specify exactly one of --container or --pid"),
             };
-            monitor::run(monitor::Options { root, target, policy, response: response.map(Into::into), verbose, duration })
+            monitor::run(monitor::Options {
+                root,
+                target,
+                policy,
+                response: response.map(Into::into),
+                verbose,
+                duration,
+            })
         }
-        Cmd::Run { policy, response, user, verbose, command } => {
+        Cmd::Run {
+            policy,
+            response,
+            user,
+            verbose,
+            command,
+        } => {
             let (uid, gid) = match user {
                 None => (None, None),
                 Some(u) => {
-                    let (a, b) = u.split_once(':').map(|(a, b)| (a, Some(b))).unwrap_or((&u, None));
-                    let uid: u32 = a.parse().map_err(|_| anyhow::anyhow!("--user takes a numeric uid[:gid]"))?;
+                    let (a, b) = u
+                        .split_once(':')
+                        .map(|(a, b)| (a, Some(b)))
+                        .unwrap_or((&u, None));
+                    let uid: u32 = a
+                        .parse()
+                        .map_err(|_| anyhow::anyhow!("--user takes a numeric uid[:gid]"))?;
                     let gid: u32 = match b {
-                        Some(g) => g.parse().map_err(|_| anyhow::anyhow!("--user takes a numeric uid[:gid]"))?,
+                        Some(g) => g
+                            .parse()
+                            .map_err(|_| anyhow::anyhow!("--user takes a numeric uid[:gid]"))?,
                         None => uid,
                     };
                     (Some(uid), Some(gid))
@@ -177,7 +206,9 @@ fn run(cli: Cli, root: PathBuf) -> Result<i32> {
         Cmd::Sessions => views::sessions(&root),
         Cmd::Incidents => views::incidents(&root),
         Cmd::Inspect { incident, raw } => views::inspect(&root, &incident, raw),
-        Cmd::Timeline { session, all, json } => views::timeline(&root, session.as_deref(), all, json),
+        Cmd::Timeline { session, all, json } => {
+            views::timeline(&root, session.as_deref(), all, json)
+        }
         Cmd::Verify { id } => views::verify(&root, &id),
         Cmd::ValidatePolicy { file } => {
             let p = Policy::load(&file)?;
@@ -197,7 +228,10 @@ fn run(cli: Cli, root: PathBuf) -> Result<i32> {
                 println!("  {} {}", tag, d.message);
             }
             if errors > 0 {
-                println!("{}", views::paint(&format!("INVALID: {} error(s)", errors), views::RED));
+                println!(
+                    "{}",
+                    views::paint(&format!("INVALID: {} error(s)", errors), views::RED)
+                );
                 Ok(1)
             } else {
                 println!("{}", views::paint("VALID", views::GREEN));
@@ -219,6 +253,11 @@ fn run(cli: Cli, root: PathBuf) -> Result<i32> {
                 None => bail!("no template '{}'", n),
             },
         },
-        Cmd::Launch { wait_fd, uid, gid, command } => launch::exec_after_release(wait_fd, uid, gid, &command),
+        Cmd::Launch {
+            wait_fd,
+            uid,
+            gid,
+            command,
+        } => launch::exec_after_release(wait_fd, uid, gid, &command),
     }
 }

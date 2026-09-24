@@ -13,9 +13,16 @@ pub enum Handle {
 }
 
 fn docker(args: &[&str]) -> Result<()> {
-    let out = Command::new("docker").args(args).output().context("running docker")?;
+    let out = Command::new("docker")
+        .args(args)
+        .output()
+        .context("running docker")?;
     if !out.status.success() {
-        bail!("docker {}: {}", args.join(" "), String::from_utf8_lossy(&out.stderr).trim());
+        bail!(
+            "docker {}: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
     }
     Ok(())
 }

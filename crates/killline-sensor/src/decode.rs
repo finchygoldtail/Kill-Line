@@ -36,8 +36,18 @@ struct Pending {
 fn has_result(r: &RawEvent) -> bool {
     matches!(
         r.kind,
-        KL_EXEC | KL_OPEN | KL_CONNECT | KL_BIND | KL_UNLINK | KL_RENAME | KL_MOUNT | KL_UNSHARE | KL_SETNS
-            | KL_PTRACE | KL_CHROOT | KL_PIVOT_ROOT
+        KL_EXEC
+            | KL_OPEN
+            | KL_CONNECT
+            | KL_BIND
+            | KL_UNLINK
+            | KL_RENAME
+            | KL_MOUNT
+            | KL_UNSHARE
+            | KL_SETNS
+            | KL_PTRACE
+            | KL_CHROOT
+            | KL_PIVOT_ROOT
     ) || (r.kind == KL_CHMOD && r.a2 != 1)
 }
 
@@ -50,10 +60,19 @@ pub struct Decoder {
     hash_cache: HashMap<(String, u64, i64), String>,
     /// (tgid, fd) -> DNS server address, from connect() to port 53.
     dns_servers: HashMap<(u32, i64), IpAddr>,
+    /// (pid, directory) recently verified not to be a symlink.
+    dir_cache: HashMap<(u32, String), std::time::Instant>,
 }
 
+/// How long a "directory is not a symlink" result is trusted. Symlink
+/// resolution from userspace is racy anyway; this bounds the extra window.
+const DIR_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(1);
+
 fn clock_ns(clock: libc::clockid_t) -> i128 {
-    let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+    let mut ts = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
     // SAFETY: valid pointer to a timespec.
     unsafe { libc::clock_gettime(clock, &mut ts) };
     ts.tv_sec as i128 * 1_000_000_000 + ts.tv_nsec as i128
@@ -74,13 +93,40 @@ impl Decoder {
             boot_offset_ns: offset,
             hash_cache: HashMap::new(),
             dns_servers: HashMap::new(),
+            dir_cache: HashMap::new(),
         }
+    }
+
+    fn realpath(&mut self, pid: u32, path: &str) -> Option<String> {
+        if self.dir_cache.len() > 50_000 {
+            self.dir_cache.clear();
+        }
+        let cache = &mut self.dir_cache;
+        realpath_in_root_cached(
+            pid,
+            path,
+            &mut |dir: &str, check: &mut dyn FnMut() -> bool| {
+                let key = (pid, dir.to_string());
+                if let Some(t) = cache.get(&key) {
+                    if t.elapsed() < DIR_CACHE_TTL {
+                        return false;
+                    }
+                }
+                let is_link = check();
+                if !is_link {
+                    cache.insert(key, std::time::Instant::now());
+                }
+                is_link
+            },
+        )
     }
 
     /// Feed one ring-buffer record. Completed observations are appended to
     /// `out`; entries with a result hook are held until their result arrives.
     pub fn feed(&mut self, bytes: &[u8], out: &mut Vec<Observation>) {
-        let Some(kind) = record_kind(bytes) else { return };
+        let Some(kind) = record_kind(bytes) else {
+            return;
+        };
         if kind == KL_RESULT {
             if let Some((tid, ret)) = result_fields(bytes) {
                 if let Some(p) = self.pending.remove(&tid) {
@@ -93,14 +139,23 @@ impl Decoder {
             }
             return;
         }
-        let Some(raw) = RawEvent::from_bytes(bytes) else { return };
+        let Some(raw) = RawEvent::from_bytes(bytes) else {
+            return;
+        };
         let obs = self.decode(&raw);
         if self.results_enabled && has_result(&raw) {
             if let Some(prev) = self.pending.remove(&raw.tid) {
                 // The previous syscall's result was lost; release it as-is.
                 Self::release(prev, out);
             }
-            self.pending.insert(raw.tid, Pending { primary: obs, companions: vec![], since: std::time::Instant::now() });
+            self.pending.insert(
+                raw.tid,
+                Pending {
+                    primary: obs,
+                    companions: vec![],
+                    since: std::time::Instant::now(),
+                },
+            );
             return;
         }
         if raw.kind == KL_FILE_OPENED {
@@ -125,7 +180,12 @@ impl Decoder {
 
     /// Release entries whose result did not arrive in time (outcome unknown).
     pub fn flush_stale(&mut self, max_age: std::time::Duration, out: &mut Vec<Observation>) {
-        let stale: Vec<u32> = self.pending.iter().filter(|(_, p)| p.since.elapsed() >= max_age).map(|(t, _)| *t).collect();
+        let stale: Vec<u32> = self
+            .pending
+            .iter()
+            .filter(|(_, p)| p.since.elapsed() >= max_age)
+            .map(|(t, _)| *t)
+            .collect();
         for t in stale {
             if let Some(p) = self.pending.remove(&t) {
                 Self::release(p, out);
@@ -164,31 +224,54 @@ impl Decoder {
                 let exists = !path.starts_with('/')
                     || std::fs::symlink_metadata(format!("/proc/{}/root{}", pid, path)).is_ok()
                     || !std::path::Path::new(&format!("/proc/{}", pid)).exists();
-                let sha256 = if exists { self.hash_exe(pid, &path) } else { None };
-                ObsKind::Exec { path, argv: redact_argv(&argv), sha256, exists }
+                let sha256 = if exists {
+                    self.hash_exe(pid, &path)
+                } else {
+                    None
+                };
+                ObsKind::Exec {
+                    path,
+                    argv: redact_argv(&argv),
+                    sha256,
+                    exists,
+                }
             }
-            KL_FORK => ObsKind::Fork { child_pid: r.a0 as u32 },
+            KL_FORK => ObsKind::Fork {
+                child_pid: r.a0 as u32,
+            },
             KL_EXIT => ObsKind::Exit,
             KL_OPEN => {
                 let raw_path = cstr(&r.path);
                 let (path, mut resolution) = resolve_at(pid, r.dfd, &raw_path);
                 let mut via = None;
                 if resolution == "lexical" {
-                    if let Some(real) = realpath_in_root(pid, &path) {
+                    if let Some(real) = self.realpath(pid, &path) {
                         if real != path {
                             via = Some(path.clone());
                             resolution = "userspace-realpath".into();
                             return Some(Observation {
                                 timestamp: self.timestamp(r.ts_ns),
                                 process,
-                                kind: ObsKind::Open { path: real, access: access_from_flags(r.a0), flags: r.a0, resolution, via },
+                                kind: ObsKind::Open {
+                                    path: real,
+                                    access: access_from_flags(r.a0),
+                                    flags: r.a0,
+                                    resolution,
+                                    via,
+                                },
                                 runtime_setup: r.flags & KL_F_RUNTIME_SETUP != 0,
                                 outcome: None,
                             });
                         }
                     }
                 }
-                ObsKind::Open { path, access: access_from_flags(r.a0), flags: r.a0, resolution, via }
+                ObsKind::Open {
+                    path,
+                    access: access_from_flags(r.a0),
+                    flags: r.a0,
+                    resolution,
+                    via,
+                }
             }
             KL_FILE_OPENED => {
                 let path = cstr(&r.path);
@@ -203,7 +286,13 @@ impl Decoder {
                 } else {
                     FileAccess::Read
                 };
-                ObsKind::Open { path, access, flags: r.a0, resolution: "kernel".into(), via: None }
+                ObsKind::Open {
+                    path,
+                    access,
+                    flags: r.a0,
+                    resolution: "kernel".into(),
+                    via: None,
+                }
             }
             KL_CONNECT | KL_SENDTO | KL_BIND => {
                 let op = match r.kind {
@@ -220,13 +309,21 @@ impl Decoder {
                                 self.dns_servers.clear();
                             }
                         }
-                        ObsKind::Net { op, addr, port: r.port }
+                        ObsKind::Net {
+                            op,
+                            addr,
+                            port: r.port,
+                        }
                     }
                     libc::AF_UNIX if op == NetOp::Connect || op == NetOp::Send => {
                         let alen = (r.a1 as usize).saturating_sub(2).min(108);
-                        let bytes = &r.path[..alen.max(1).min(108)];
+                        let bytes = &r.path[..alen.clamp(1, 108)];
                         let abstract_ns = bytes.first() == Some(&0);
-                        let path = if abstract_ns { cstr(&bytes[1..]) } else { cstr(bytes) };
+                        let path = if abstract_ns {
+                            cstr(&bytes[1..])
+                        } else {
+                            cstr(bytes)
+                        };
                         if path.is_empty() && !abstract_ns {
                             return None;
                         }
@@ -245,18 +342,37 @@ impl Decoder {
                 };
                 ObsKind::Dns { server, query }
             }
-            KL_SOCKET => ObsKind::Socket { family: r.a0 as u32, sock_type: r.a1 as u32, protocol: r.a2 as u32 },
-            KL_UNLINK => ObsKind::Unlink { path: resolve_at(pid, r.dfd, &cstr(&r.path)).0 },
+            KL_SOCKET => ObsKind::Socket {
+                family: r.a0 as u32,
+                sock_type: r.a1 as u32,
+                protocol: r.a2 as u32,
+            },
+            KL_UNLINK => ObsKind::Unlink {
+                path: resolve_at(pid, r.dfd, &cstr(&r.path)).0,
+            },
             KL_RENAME => ObsKind::Rename {
                 from: resolve_at(pid, r.dfd, &cstr(&r.path)).0,
                 to: resolve_at(pid, r.dfd, &cstr(&r.path2)).0,
             },
             KL_CHMOD => {
-                let path = if r.a2 == 1 { fd_path(pid, r.dfd).unwrap_or_default() } else { resolve_at(pid, r.dfd, &cstr(&r.path)).0 };
-                ObsKind::Chmod { path, mode: r.a0 as u32 }
+                let path = if r.a2 == 1 {
+                    fd_path(pid, r.dfd).unwrap_or_default()
+                } else {
+                    resolve_at(pid, r.dfd, &cstr(&r.path)).0
+                };
+                ObsKind::Chmod {
+                    path,
+                    mode: r.a0 as u32,
+                }
             }
-            KL_MOUNT => ObsKind::Mount { source: cstr(&r.path2), target: cstr(&r.path), flags: r.a0 },
-            KL_UMOUNT => ObsKind::Umount { target: cstr(&r.path) },
+            KL_MOUNT => ObsKind::Mount {
+                source: cstr(&r.path2),
+                target: cstr(&r.path),
+                flags: r.a0,
+            },
+            KL_UMOUNT => ObsKind::Umount {
+                target: cstr(&r.path),
+            },
             KL_SETUID => {
                 let (call, n) = match r.a0 {
                     1 => ("setuid", 1),
@@ -267,18 +383,39 @@ impl Decoder {
                     6 => ("setresgid", 3),
                     _ => ("setid", 3),
                 };
-                let all = [r.a1 as u32 as i32 as i64, r.a2 as u32 as i32 as i64, r.dfd as u32 as i32 as i64];
-                ObsKind::SetId { call: call.into(), args: all[..n].to_vec() }
+                let all = [
+                    r.a1 as u32 as i32 as i64,
+                    r.a2 as u32 as i32 as i64,
+                    r.dfd as u32 as i32 as i64,
+                ];
+                ObsKind::SetId {
+                    call: call.into(),
+                    args: all[..n].to_vec(),
+                }
             }
-            KL_CAPSET => ObsKind::Capset { effective: r.a0 as u32, permitted: r.a1 as u32 },
+            KL_CAPSET => ObsKind::Capset {
+                effective: r.a0 as u32,
+                permitted: r.a1 as u32,
+            },
             KL_UNSHARE => ObsKind::Unshare { flags: r.a0 },
             KL_SETNS => ObsKind::Setns { nstype: r.a1 },
-            KL_PTRACE => ObsKind::Ptrace { request: r.a0, target_pid: r.a1 as i32 as i64 },
-            KL_KILL => ObsKind::Kill { target_pid: r.a0 as i32 as i64, signal: r.a1 },
+            KL_PTRACE => ObsKind::Ptrace {
+                request: r.a0,
+                target_pid: r.a1 as i32 as i64,
+            },
+            KL_KILL => ObsKind::Kill {
+                target_pid: r.a0 as i32 as i64,
+                signal: r.a1,
+            },
             KL_BPF => ObsKind::Bpf { cmd: r.a0 },
             KL_MODULE => ObsKind::ModuleLoad,
-            KL_CHROOT => ObsKind::Chroot { path: cstr(&r.path) },
-            KL_PIVOT_ROOT => ObsKind::PivotRoot { new_root: cstr(&r.path), put_old: cstr(&r.path2) },
+            KL_CHROOT => ObsKind::Chroot {
+                path: cstr(&r.path),
+            },
+            KL_PIVOT_ROOT => ObsKind::PivotRoot {
+                new_root: cstr(&r.path),
+                put_old: cstr(&r.path2),
+            },
             _ => return None,
         };
         Some(Observation {
@@ -346,7 +483,9 @@ fn ip_from(family: u16, b: &[u8; 16]) -> IpAddr {
 }
 
 fn fd_path(pid: u32, fd: i64) -> Option<String> {
-    std::fs::read_link(format!("/proc/{}/fd/{}", pid, fd)).ok().map(|p| p.to_string_lossy().into_owned())
+    std::fs::read_link(format!("/proc/{}/fd/{}", pid, fd))
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned())
 }
 
 /// Resolve a path argument of an *at() syscall to an absolute path.
@@ -361,7 +500,9 @@ pub fn resolve_at(pid: u32, dfd: i64, path: &str) -> (String, String) {
         return (String::new(), "unresolved".into());
     }
     let base = if dfd == AT_FDCWD {
-        std::fs::read_link(format!("/proc/{}/cwd", pid)).ok().map(|p| p.to_string_lossy().into_owned())
+        std::fs::read_link(format!("/proc/{}/cwd", pid))
+            .ok()
+            .map(|p| p.to_string_lossy().into_owned())
     } else {
         fd_path(pid, dfd)
     };
@@ -377,11 +518,30 @@ pub fn resolve_at(pid: u32, dfd: i64, path: &str) -> (String, String) {
 /// change between the agent's open and this lookup. /proc and /dev/fd are
 /// skipped because their "magic" links would resolve relative to KillLine.
 pub fn realpath_in_root(pid: u32, path: &str) -> Option<String> {
-    if path.starts_with("/proc/") || path == "/proc" || path.starts_with("/dev/fd") || path.starts_with("/dev/std") {
+    realpath_in_root_cached(pid, path, &mut |_, check| check())
+}
+
+/// `dir_is_link(prefix, check)` decides whether an intermediate directory is
+/// a symlink, calling `check` to actually lstat it (callers may cache).
+/// The final component is always checked.
+pub fn realpath_in_root_cached(
+    pid: u32,
+    path: &str,
+    dir_is_link: &mut dyn FnMut(&str, &mut dyn FnMut() -> bool) -> bool,
+) -> Option<String> {
+    if path.starts_with("/proc/")
+        || path == "/proc"
+        || path.starts_with("/dev/fd")
+        || path.starts_with("/dev/std")
+    {
         return None;
     }
     let root = format!("/proc/{}/root", pid);
-    let mut todo: std::collections::VecDeque<String> = path.split('/').filter(|c| !c.is_empty()).map(String::from).collect();
+    let mut todo: std::collections::VecDeque<String> = path
+        .split('/')
+        .filter(|c| !c.is_empty())
+        .map(String::from)
+        .collect();
     let mut cur: Vec<String> = Vec::new();
     let mut hops = 0;
     let mut missing = false;
@@ -398,30 +558,40 @@ pub fn realpath_in_root(pid: u32, path: &str) -> Option<String> {
         if missing {
             continue;
         }
-        let host = format!("{}/{}", root, cur.join("/"));
-        match std::fs::symlink_metadata(&host) {
-            Ok(m) if m.file_type().is_symlink() => {
-                hops += 1;
-                if hops > 40 {
-                    return None;
-                }
-                let target = std::fs::read_link(&host).ok()?;
-                let t = target.to_string_lossy().into_owned();
-                cur.pop();
-                if t.starts_with('/') {
-                    cur.clear();
-                }
-                for (i, comp) in t.split('/').filter(|c| !c.is_empty()).enumerate() {
-                    todo.insert(i, comp.to_string());
-                }
+        let rel = cur.join("/");
+        let host = format!("{}/{}", root, rel);
+        let is_last = todo.is_empty();
+        let mut meta = None;
+        let mut check = || {
+            let m = std::fs::symlink_metadata(&host);
+            let link = matches!(&m, Ok(m) if m.file_type().is_symlink());
+            meta = Some(m.is_ok());
+            link
+        };
+        let is_link = if is_last {
+            check()
+        } else {
+            dir_is_link(&rel, &mut check)
+        };
+        if is_link {
+            hops += 1;
+            if hops > 40 {
+                return None;
             }
-            Ok(_) => {}
-            Err(_) => {
-                if !std::path::Path::new(&root).exists() {
-                    return None;
-                }
-                missing = true;
+            let target = std::fs::read_link(&host).ok()?;
+            let t = target.to_string_lossy().into_owned();
+            cur.pop();
+            if t.starts_with('/') {
+                cur.clear();
             }
+            for (i, comp) in t.split('/').filter(|c| !c.is_empty()).enumerate() {
+                todo.insert(i, comp.to_string());
+            }
+        } else if meta == Some(false) {
+            if !std::path::Path::new(&root).exists() {
+                return None;
+            }
+            missing = true;
         }
     }
     Some(format!("/{}", cur.join("/")))
@@ -447,7 +617,10 @@ pub fn parse_dns_query(p: &[u8]) -> Option<String> {
             return None; // compression pointers are not valid in a question
         }
         let label = p.get(i + 1..i + 1 + len)?;
-        if !label.iter().all(|c| c.is_ascii_alphanumeric() || *c == b'-' || *c == b'_') {
+        if !label
+            .iter()
+            .all(|c| c.is_ascii_alphanumeric() || *c == b'-' || *c == b'_')
+        {
             return None;
         }
         labels.push(String::from_utf8_lossy(label).into_owned());

@@ -6,7 +6,7 @@
 
 use crate::anomaly::AnomalyDetector;
 use crate::event::*;
-use crate::pathmatch::{self, first_match};
+use crate::pathmatch;
 use crate::policy::*;
 use chrono::{DateTime, Duration, Utc};
 use std::collections::{HashMap, VecDeque};
@@ -15,8 +15,8 @@ use std::net::IpAddr;
 /// Executables that exist to change privilege or escape confinement.
 const PRIVILEGE_TOOLS: &[&str] = &[
     "sudo", "su", "doas", "pkexec", "runuser", "setpriv", "nsenter", "unshare", "capsh", "chroot",
-    "mount", "umount", "insmod", "modprobe", "newgrp", "sg", "docker", "podman", "nerdctl",
-    "ctr", "crictl", "kubectl",
+    "mount", "umount", "insmod", "modprobe", "newgrp", "sg", "docker", "podman", "nerdctl", "ctr",
+    "crictl", "kubectl",
 ];
 
 const CLONE_NEWNS: u64 = 0x0002_0000;
@@ -26,8 +26,13 @@ const CLONE_NEWIPC: u64 = 0x0800_0000;
 const CLONE_NEWUSER: u64 = 0x1000_0000;
 const CLONE_NEWPID: u64 = 0x2000_0000;
 const CLONE_NEWNET: u64 = 0x4000_0000;
-const NS_FLAGS: u64 =
-    CLONE_NEWNS | CLONE_NEWCGROUP | CLONE_NEWUTS | CLONE_NEWIPC | CLONE_NEWUSER | CLONE_NEWPID | CLONE_NEWNET;
+const NS_FLAGS: u64 = CLONE_NEWNS
+    | CLONE_NEWCGROUP
+    | CLONE_NEWUTS
+    | CLONE_NEWIPC
+    | CLONE_NEWUSER
+    | CLONE_NEWPID
+    | CLONE_NEWNET;
 
 /// How long after an allowed-domain DNS query a connection to an unlisted IP
 /// is attributed to that domain (V1 does not observe DNS answers).
@@ -101,7 +106,12 @@ impl Decision {
             explanation: explanation.into(),
         }
     }
-    fn anomaly(category: Category, action: &'static str, severity: Severity, explanation: impl Into<String>) -> Self {
+    fn anomaly(
+        category: Category,
+        action: &'static str,
+        severity: Severity,
+        explanation: impl Into<String>,
+    ) -> Self {
         Decision {
             category,
             action,
@@ -140,8 +150,18 @@ impl Engine {
     }
 
     /// Create a KillLine-originated event (coverage, drops, responses).
-    pub fn notice(&mut self, category: Category, action: &str, severity: Severity, explanation: String) -> Event {
-        let verdict = if category == Category::Tamper { Verdict::Violation } else { Verdict::Notice };
+    pub fn notice(
+        &mut self,
+        category: Category,
+        action: &str,
+        severity: Severity,
+        explanation: String,
+    ) -> Event {
+        let verdict = if category == Category::Tamper {
+            Verdict::Violation
+        } else {
+            Verdict::Notice
+        };
         Event {
             seq: self.next_seq(),
             timestamp: Utc::now(),
@@ -167,7 +187,10 @@ impl Engine {
     /// behavioural-anomaly events it triggered.
     pub fn process(&mut self, obs: Observation) -> Vec<Event> {
         let mut confirms = None;
-        if let ObsKind::Open { path, resolution, .. } = &obs.kind {
+        if let ObsKind::Open {
+            path, resolution, ..
+        } = &obs.kind
+        {
             if resolution == "kernel" {
                 if let Some((p, seq, verdict)) = self.last_open.get(&obs.process.tid) {
                     if p == path {
@@ -184,8 +207,19 @@ impl Engine {
         let mut d = self.decide(&obs);
         if d.verdict == Verdict::Violation {
             if let Some(o) = &obs.outcome {
-                if let (ObsKind::Open { path, access: FileAccess::Write, .. }, true) = (&obs.kind, matches!(o, Outcome::Failed { .. })) {
-                    if BENIGN_FAILED_WRITES.iter().any(|p| pathmatch::matches(p, path)) {
+                if let (
+                    ObsKind::Open {
+                        path,
+                        access: FileAccess::Write,
+                        ..
+                    },
+                    true,
+                ) = (&obs.kind, matches!(o, Outcome::Failed { .. }))
+                {
+                    if BENIGN_FAILED_WRITES
+                        .iter()
+                        .any(|p| pathmatch::matches(p, path))
+                    {
                         d = Decision::allowed(
                             Category::Filesystem,
                             "file.write_blocked_benign",
@@ -224,7 +258,12 @@ impl Engine {
             session_id: self.session_id.clone(),
             agent_id: self.agent_id.clone(),
             category: d.category,
-            action: if confirms.is_some() { "file.opened" } else { d.action }.to_string(),
+            action: if confirms.is_some() {
+                "file.opened"
+            } else {
+                d.action
+            }
+            .to_string(),
             severity: d.severity,
             verdict: d.verdict,
             allowed: d.verdict != Verdict::Violation,
@@ -238,9 +277,13 @@ impl Engine {
             confirms_seq: confirms,
         };
 
-        if let ObsKind::Open { path, resolution, .. } = &obs.kind {
+        if let ObsKind::Open {
+            path, resolution, ..
+        } = &obs.kind
+        {
             if resolution != "kernel" {
-                self.last_open.insert(obs.process.tid, (path.clone(), seq, ev.verdict));
+                self.last_open
+                    .insert(obs.process.tid, (path.clone(), seq, ev.verdict));
             }
         }
         if let ObsKind::Exit = obs.kind {
@@ -255,7 +298,7 @@ impl Engine {
         let mut out = vec![ev];
         if self.policy.source.anomaly.enabled && !obs.runtime_setup {
             let runtime = match &obs.kind {
-                ObsKind::Open { path, .. } => first_match(&self.policy.runtime_read, path).is_some(),
+                ObsKind::Open { path, .. } => self.policy.runtime_read.matches(path),
                 _ => false,
             };
             for a in self.anomaly.observe(&obs, runtime) {
@@ -290,7 +333,10 @@ impl Engine {
     fn remember(&mut self, ev: &Event) {
         let (untrusted_read, credential, file_read) = match &ev.observation {
             Some(ObsKind::Open { path, access, .. }) => (
-                first_match(&self.policy.untrusted, path).map(|_| path.clone()),
+                self.policy
+                    .untrusted
+                    .first_match(path)
+                    .map(|_| path.clone()),
                 ev.category == Category::Credential,
                 *access != FileAccess::Write && ev.action != "file.runtime_read",
             ),
@@ -300,7 +346,11 @@ impl Engine {
             seq: ev.seq,
             ts: ev.timestamp,
             verdict: ev.verdict,
-            summary: ev.resource_summary(),
+            summary: if credential {
+                ev.resource_summary()
+            } else {
+                String::new()
+            },
             untrusted_read,
             credential,
             file_read,
@@ -330,7 +380,10 @@ impl Engine {
             });
         }
 
-        let is_network = matches!(ev.category, Category::Network | Category::Dns | Category::CloudMetadata);
+        let is_network = matches!(
+            ev.category,
+            Category::Network | Category::Dns | Category::CloudMetadata
+        );
         if is_network {
             let creds: Vec<&&Recent> = recent.iter().filter(|r| r.credential).collect();
             if let Some(last) = creds.last() {
@@ -346,7 +399,10 @@ impl Engine {
                     related_seq: creds.iter().map(|r| r.seq).collect(),
                 });
             }
-            let reads: Vec<&&Recent> = recent.iter().filter(|r| r.file_read && !r.credential).collect();
+            let reads: Vec<&&Recent> = recent
+                .iter()
+                .filter(|r| r.file_read && !r.credential)
+                .collect();
             if reads.len() >= 100 {
                 out.push(Correlation {
                     summary: format!(
@@ -487,7 +543,7 @@ impl Engine {
                 format!("The agent called pivot_root({}).", new_root),
             ),
             ObsKind::SetId { call, args } => {
-                let to_root = args.iter().any(|a| *a == 0);
+                let to_root = args.contains(&0);
                 if to_root && p.uid != 0 {
                     return self.privileged(
                         Category::Privilege,
@@ -567,9 +623,22 @@ impl Engine {
         }
     }
 
-    fn privileged(&self, category: Category, action: &'static str, severity: Severity, explanation: String) -> Decision {
+    fn privileged(
+        &self,
+        category: Category,
+        action: &'static str,
+        severity: Severity,
+        explanation: String,
+    ) -> Decision {
         if self.policy.source.processes.deny_privileged {
-            Decision::violation(category, action, severity, "processes.deny_privileged", "No privileged or namespace operations", explanation)
+            Decision::violation(
+                category,
+                action,
+                severity,
+                "processes.deny_privileged",
+                "No privileged or namespace operations",
+                explanation,
+            )
         } else {
             Decision::anomaly(category, action, severity, explanation)
         }
@@ -592,7 +661,10 @@ impl Engine {
                 Severity::High,
                 format!("processes.deny[{}]", rule),
                 format!("{} must never run", rule),
-                format!("The agent started {}, which this policy explicitly forbids.", path),
+                format!(
+                    "The agent started {}, which this policy explicitly forbids.",
+                    path
+                ),
             );
         }
         if proc.deny_privileged && PRIVILEGE_TOOLS.contains(&base) {
@@ -602,27 +674,40 @@ impl Engine {
                 Severity::High,
                 "processes.deny_privileged",
                 "No privilege-changing tools",
-                format!("The agent started {}, a tool used to change privileges or escape confinement.", path),
+                format!(
+                    "The agent started {}, a tool used to change privileges or escape confinement.",
+                    path
+                ),
             );
         }
         if !exists {
             return Decision::allowed(
                 Category::Process,
                 "process.exec_not_found",
-                format!("Tried to execute {}, which does not exist (typically a PATH search).", path),
+                format!(
+                    "Tried to execute {}, which does not exist (typically a PATH search).",
+                    path
+                ),
             );
         }
-        if !proc.allow.is_empty() && !proc.allow.iter().any(|e| name_match(e)) {
+        if !proc.allow.is_empty() && !proc.allow.iter().any(name_match) {
             return Decision::violation(
                 Category::Process,
                 "process.exec_unexpected",
                 Severity::Medium,
                 "processes.allow",
                 format!("Only these programs: {}", proc.allow.join(", ")),
-                format!("The agent started {}, which is not in the list of allowed programs.", path),
+                format!(
+                    "The agent started {}, which is not in the list of allowed programs.",
+                    path
+                ),
             );
         }
-        Decision::allowed(Category::Process, "process.exec", format!("Started {}.", path))
+        Decision::allowed(
+            Category::Process,
+            "process.exec",
+            format!("Started {}.", path),
+        )
     }
 
     fn is_other_proc(path: &str, pid: u32) -> bool {
@@ -631,12 +716,21 @@ impl Engine {
             return false;
         }
         match it.next() {
-            Some(n) => n.parse::<u32>().map(|n| n != pid && n != 0).unwrap_or(false),
+            Some(n) => n
+                .parse::<u32>()
+                .map(|n| n != pid && n != 0)
+                .unwrap_or(false),
             None => false,
         }
     }
 
-    fn decide_file(&self, p: &ProcessInfo, path: &str, access: FileAccess, resolution: &str) -> Decision {
+    fn decide_file(
+        &self,
+        p: &ProcessInfo,
+        path: &str,
+        access: FileAccess,
+        resolution: &str,
+    ) -> Decision {
         let pol = &self.policy;
         let how = match resolution {
             "kernel" => " (kernel-resolved path)",
@@ -663,11 +757,15 @@ impl Engine {
         // /proc/<pid>/... rules are only meaningful for lexical paths: the
         // kernel renders /proc/self as the namespace-local pid.
         let proc_ok = resolution != "kernel" && path.starts_with("/proc/");
-        for (pat, what) in ESCAPE_INDICATORS {
-            if pathmatch::matches(pat, path) {
-                if pat.starts_with("/proc/*/") && !(proc_ok && Self::is_other_proc(path, p.pid)) {
-                    continue;
-                }
+        if let Some(pat) = pol.escape_indicators.first_match(path) {
+            let skip =
+                pat.starts_with("/proc/*/") && !(proc_ok && Self::is_other_proc(path, p.pid));
+            if !skip {
+                let what = ESCAPE_INDICATORS
+                    .iter()
+                    .find(|(p, _)| *p == pat)
+                    .map(|(_, w)| *w)
+                    .unwrap_or("");
                 return Decision::violation(
                     Category::ContainerEscape,
                     "escape.sensitive_path",
@@ -682,7 +780,8 @@ impl Engine {
             }
         }
 
-        if RUNTIME_SOCKETS.contains(&path) && pol.source.container_runtime.access == Access::Deny {
+        if pol.runtime_sockets.matches(path) && pol.source.container_runtime.access == Access::Deny
+        {
             return Decision::violation(
                 Category::ContainerRuntime,
                 "runtime.socket_open",
@@ -693,9 +792,10 @@ impl Engine {
             );
         }
 
-        if pol.source.credentials.access == Access::Deny && first_match(&pol.credential_allow, path).is_none() {
-            if let Some(rule) = first_match(&pol.credential_paths, path) {
-                let skip = rule.starts_with("/proc/*/") && !(proc_ok && Self::is_other_proc(path, p.pid));
+        if pol.source.credentials.access == Access::Deny && !pol.credential_allow.matches(path) {
+            if let Some(rule) = pol.credential_paths.first_match(path) {
+                let skip =
+                    rule.starts_with("/proc/*/") && !(proc_ok && Self::is_other_proc(path, p.pid));
                 if !skip {
                     return Decision::violation(
                         Category::Credential,
@@ -713,20 +813,27 @@ impl Engine {
             }
         }
 
-        if let Some(rule) = first_match(&pol.deny, path) {
+        if let Some(rule) = pol.deny.first_match(path) {
             return Decision::violation(
                 Category::Filesystem,
                 "file.denied_path",
                 Severity::High,
                 format!("filesystem.deny[{}]", rule),
                 format!("No access to {}", rule),
-                format!("The agent tried to {} {}{}. This location is explicitly denied by policy.", verb, path, how),
+                format!(
+                    "The agent tried to {} {}{}. This location is explicitly denied by policy.",
+                    verb, path, how
+                ),
             );
         }
 
         if access == FileAccess::Write {
-            if first_match(&pol.write_allow, path).is_some() || RUNTIME_WRITE_PATHS.iter().any(|w| pathmatch::matches(w, path)) {
-                return Decision::allowed(Category::Filesystem, "file.write", format!("Opened {} for writing.", path));
+            if pol.write_allow.matches(path) || pol.runtime_write.matches(path) {
+                return Decision::allowed(
+                    Category::Filesystem,
+                    "file.write",
+                    format!("Opened {} for writing.", path),
+                );
             }
             return Decision::violation(
                 Category::Filesystem,
@@ -738,11 +845,23 @@ impl Engine {
             );
         }
 
-        if first_match(&pol.read_allow, path).is_some() {
-            return Decision::allowed(Category::Filesystem, if access == FileAccess::List { "file.list" } else { "file.read" }, format!("Opened {} for reading.", path));
+        if pol.read_allow.matches(path) {
+            return Decision::allowed(
+                Category::Filesystem,
+                if access == FileAccess::List {
+                    "file.list"
+                } else {
+                    "file.read"
+                },
+                format!("Opened {} for reading.", path),
+            );
         }
-        if first_match(&pol.runtime_read, path).is_some() {
-            return Decision::allowed(Category::Filesystem, "file.runtime_read", format!("Read runtime file {}.", path));
+        if pol.runtime_read.matches(path) {
+            return Decision::allowed(
+                Category::Filesystem,
+                "file.runtime_read",
+                format!("Read runtime file {}.", path),
+            );
         }
         Decision::violation(
             Category::Filesystem,
@@ -754,7 +873,13 @@ impl Engine {
         )
     }
 
-    fn decide_mutation(&self, p: &ProcessInfo, path: &str, action: &'static str, verb: &str) -> Decision {
+    fn decide_mutation(
+        &self,
+        p: &ProcessInfo,
+        path: &str,
+        action: &'static str,
+        verb: &str,
+    ) -> Decision {
         let d = self.decide_file(p, path, FileAccess::Write, "lexical");
         if d.verdict == Verdict::Violation {
             let mut d = d;
@@ -775,7 +900,11 @@ impl Engine {
 
         if op == NetOp::Bind {
             if addr.is_loopback() || port == 0 {
-                return Decision::allowed(Category::Network, "net.bind", format!("Bound a socket to {}.", dest));
+                return Decision::allowed(
+                    Category::Network,
+                    "net.bind",
+                    format!("Bound a socket to {}.", dest),
+                );
             }
             if pol.network_mode == NetworkMode::Deny {
                 return Decision::violation(
@@ -787,12 +916,23 @@ impl Engine {
                     format!("The agent tried to open a network listener on {}. This policy does not allow any network access.", dest),
                 );
             }
-            return Decision::allowed(Category::Network, "net.bind", format!("Bound a socket to {}.", dest));
+            return Decision::allowed(
+                Category::Network,
+                "net.bind",
+                format!("Bound a socket to {}.", dest),
+            );
         }
 
-        if let Some((_, what)) = METADATA_IPS.iter().find(|(ip, _)| ip.parse::<IpAddr>().ok() == Some(addr)) {
+        if let Some((_, what)) = METADATA_IPS
+            .iter()
+            .find(|(ip, _)| ip.parse::<IpAddr>().ok() == Some(addr))
+        {
             if pol.source.cloud_metadata.access == Access::Allow {
-                return Decision::allowed(Category::CloudMetadata, "metadata.connect", format!("Connected to {} ({}), allowed by policy.", dest, what));
+                return Decision::allowed(
+                    Category::CloudMetadata,
+                    "metadata.connect",
+                    format!("Connected to {} ({}), allowed by policy.", dest, what),
+                );
             }
             return Decision::violation(
                 Category::CloudMetadata,
@@ -810,7 +950,11 @@ impl Engine {
 
         if addr.is_loopback() {
             if pol.source.network.allow_localhost || pol.network_mode == NetworkMode::Allow {
-                return Decision::allowed(Category::Network, "net.localhost", format!("Connected to local service {}.", dest));
+                return Decision::allowed(
+                    Category::Network,
+                    "net.localhost",
+                    format!("Connected to local service {}.", dest),
+                );
             }
             return Decision::violation(
                 Category::Network,
@@ -822,7 +966,11 @@ impl Engine {
             );
         }
 
-        let verb = if op == NetOp::Connect { "connect to" } else { "send data to" };
+        let verb = if op == NetOp::Connect {
+            "connect to"
+        } else {
+            "send data to"
+        };
         match pol.network_mode {
             NetworkMode::Allow => Decision::allowed(Category::Network, "net.connect", format!("Connected to {}.", dest)),
             NetworkMode::Deny => Decision::violation(
@@ -874,17 +1022,30 @@ impl Engine {
         }
     }
 
-    fn decide_dns(&mut self, query: Option<&str>, server: Option<IpAddr>, ts: DateTime<Utc>) -> Decision {
-        let name = query.unwrap_or("<unparsed>").trim_end_matches('.').to_ascii_lowercase();
+    fn decide_dns(
+        &mut self,
+        query: Option<&str>,
+        server: Option<IpAddr>,
+        ts: DateTime<Utc>,
+    ) -> Decision {
+        let name = query
+            .unwrap_or("<unparsed>")
+            .trim_end_matches('.')
+            .to_ascii_lowercase();
         let via = server.map(|s| format!(" via {}", s)).unwrap_or_default();
-        if METADATA_HOSTS.contains(&name.as_str()) && self.policy.source.cloud_metadata.access == Access::Deny {
+        if METADATA_HOSTS.contains(&name.as_str())
+            && self.policy.source.cloud_metadata.access == Access::Deny
+        {
             return Decision::violation(
                 Category::CloudMetadata,
                 "metadata.dns",
                 Severity::Critical,
                 "cloud_metadata.access=deny",
                 "No access to cloud instance metadata",
-                format!("The agent tried to resolve the cloud metadata hostname {}{}.", name, via),
+                format!(
+                    "The agent tried to resolve the cloud metadata hostname {}{}.",
+                    name, via
+                ),
             );
         }
         match self.policy.network_mode {

@@ -7,14 +7,46 @@
 pub const REDACTED: &str = "[REDACTED]";
 
 const SECRET_KEYS: &[&str] = &[
-    "pass", "pwd", "secret", "token", "apikey", "api_key", "api-key", "auth", "credential",
-    "private", "session", "cookie", "bearer", "access_key", "access-key", "signature",
+    "pass",
+    "pwd",
+    "secret",
+    "token",
+    "apikey",
+    "api_key",
+    "api-key",
+    "auth",
+    "credential",
+    "private",
+    "session",
+    "cookie",
+    "bearer",
+    "access_key",
+    "access-key",
+    "signature",
 ];
 
 const SECRET_PREFIXES: &[&str] = &[
-    "sk-", "sk_live_", "sk_test_", "ghp_", "gho_", "ghs_", "ghu_", "github_pat_", "glpat-",
-    "xoxb-", "xoxp-", "xoxa-", "AKIA", "ASIA", "AIza", "ya29.", "eyJ", "npm_", "pypi-",
-    "hf_", "-----BEGIN",
+    "sk-",
+    "sk_live_",
+    "sk_test_",
+    "ghp_",
+    "gho_",
+    "ghs_",
+    "ghu_",
+    "github_pat_",
+    "glpat-",
+    "xoxb-",
+    "xoxp-",
+    "xoxa-",
+    "AKIA",
+    "ASIA",
+    "AIza",
+    "ya29.",
+    "eyJ",
+    "npm_",
+    "pypi-",
+    "hf_",
+    "-----BEGIN",
 ];
 
 fn key_is_secret(key: &str) -> bool {
@@ -105,13 +137,32 @@ mod tests {
 
     #[test]
     fn redacts_flags_and_assignments() {
-        let r = redact_argv(&v(&["curl", "--token", "abc", "--api-key=xyz", "AWS_SECRET_ACCESS_KEY=q"]));
-        assert_eq!(r, v(&["curl", "--token", REDACTED, "--api-key=[REDACTED]", "AWS_SECRET_ACCESS_KEY=[REDACTED]"]));
+        let r = redact_argv(&v(&[
+            "curl",
+            "--token",
+            "abc",
+            "--api-key=xyz",
+            "AWS_SECRET_ACCESS_KEY=q",
+        ]));
+        assert_eq!(
+            r,
+            v(&[
+                "curl",
+                "--token",
+                REDACTED,
+                "--api-key=[REDACTED]",
+                "AWS_SECRET_ACCESS_KEY=[REDACTED]"
+            ])
+        );
     }
 
     #[test]
     fn redacts_token_shapes_and_urls() {
-        let r = redact_argv(&v(&["x", "ghp_aaaaaaaaaaaaaaaaaaaa", "https://bob:hunter2@example.com/repo"]));
+        let r = redact_argv(&v(&[
+            "x",
+            "ghp_aaaaaaaaaaaaaaaaaaaa",
+            "https://bob:hunter2@example.com/repo",
+        ]));
         assert_eq!(r[1], REDACTED);
         assert_eq!(r[2], REDACTED);
         let h = redact_argv(&v(&["-H", "Authorization: Bearer abc"]));
@@ -120,7 +171,13 @@ mod tests {
 
     #[test]
     fn leaves_ordinary_arguments() {
-        let a = v(&["python3", "/workspace/worker.py", "--output", "/workspace/output/r.txt", "-v"]);
+        let a = v(&[
+            "python3",
+            "/workspace/worker.py",
+            "--output",
+            "/workspace/output/r.txt",
+            "-v",
+        ]);
         assert_eq!(redact_argv(&a), a);
     }
 }

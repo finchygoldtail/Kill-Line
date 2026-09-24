@@ -25,7 +25,14 @@ pub struct AnomalyDetector {
 
 impl AnomalyDetector {
     pub fn new(cfg: AnomalyPolicy) -> Self {
-        AnomalyDetector { cfg, files: VecDeque::new(), file_counts: HashMap::new(), dests: VecDeque::new(), execs: VecDeque::new(), last_fired: [None; 3] }
+        AnomalyDetector {
+            cfg,
+            files: VecDeque::new(),
+            file_counts: HashMap::new(),
+            dests: VecDeque::new(),
+            execs: VecDeque::new(),
+            last_fired: [None; 3],
+        }
     }
 
     fn window(&self) -> Duration {
@@ -52,7 +59,13 @@ impl AnomalyDetector {
             ObsKind::Open { path, .. } if !runtime_path => {
                 self.files.push_back((now, path.clone()));
                 *self.file_counts.entry(path.clone()).or_insert(0) += 1;
-                while self.files.len() > 100_000 || self.files.front().map(|(t, _)| *t < horizon).unwrap_or(false) {
+                while self.files.len() > 100_000
+                    || self
+                        .files
+                        .front()
+                        .map(|(t, _)| *t < horizon)
+                        .unwrap_or(false)
+                {
                     if let Some((_, old)) = self.files.pop_front() {
                         if let Some(c) = self.file_counts.get_mut(&old) {
                             *c -= 1;
@@ -67,7 +80,10 @@ impl AnomalyDetector {
                     let mut dirs: Vec<&str> = self
                         .file_counts
                         .keys()
-                        .filter_map(|p| p.rsplit_once('/').map(|(d, _)| if d.is_empty() { "/" } else { d }))
+                        .filter_map(|p| {
+                            p.rsplit_once('/')
+                                .map(|(d, _)| if d.is_empty() { "/" } else { d })
+                        })
                         .collect::<HashSet<_>>()
                         .into_iter()
                         .collect();
@@ -87,12 +103,26 @@ impl AnomalyDetector {
                     });
                 }
             }
-            ObsKind::Net { op: NetOp::Connect | NetOp::Send, addr, port } => {
+            ObsKind::Net {
+                op: NetOp::Connect | NetOp::Send,
+                addr,
+                port,
+            } => {
                 self.dests.push_back((now, format!("{}:{}", addr, port)));
-                while self.dests.front().map(|(t, _)| *t < horizon).unwrap_or(false) {
+                while self
+                    .dests
+                    .front()
+                    .map(|(t, _)| *t < horizon)
+                    .unwrap_or(false)
+                {
                     self.dests.pop_front();
                 }
-                let distinct = self.dests.iter().map(|(_, d)| d.as_str()).collect::<HashSet<&str>>().len();
+                let distinct = self
+                    .dests
+                    .iter()
+                    .map(|(_, d)| d.as_str())
+                    .collect::<HashSet<&str>>()
+                    .len();
                 if distinct >= self.cfg.network_scan_threshold && self.cooled(1, now) {
                     out.push(AnomalyFinding {
                         action: "anomaly.network_scan",

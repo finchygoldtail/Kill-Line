@@ -104,7 +104,86 @@ fn segment_match(p: &[u8], s: &[u8]) -> bool {
 
 /// First pattern in `patterns` that matches `path`.
 pub fn first_match<'a>(patterns: &'a [String], path: &str) -> Option<&'a str> {
-    patterns.iter().find(|p| matches(p, path)).map(|s| s.as_str())
+    patterns
+        .iter()
+        .find(|p| matches(p, path))
+        .map(|s| s.as_str())
+}
+
+/// A pre-compiled list of patterns. Matching allocates nothing; plain
+/// prefixes are checked before globs.
+#[derive(Debug, Clone, Default)]
+pub struct PatternSet {
+    raw: Vec<String>,
+    /// (normalised prefix, index into raw)
+    prefixes: Vec<(String, usize)>,
+    /// (segments, index into raw)
+    globs: Vec<(Vec<String>, usize)>,
+}
+
+impl PatternSet {
+    pub fn new<I: IntoIterator<Item = S>, S: AsRef<str>>(patterns: I) -> PatternSet {
+        let mut set = PatternSet::default();
+        for p in patterns {
+            let p = p.as_ref();
+            let i = set.raw.len();
+            set.raw.push(p.to_string());
+            if is_glob(p) {
+                set.globs.push((
+                    p.split('/')
+                        .filter(|s| !s.is_empty())
+                        .map(String::from)
+                        .collect(),
+                    i,
+                ));
+            } else {
+                set.prefixes.push((normalize(p), i));
+            }
+        }
+        set
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.raw.is_empty()
+    }
+
+    pub fn patterns(&self) -> &[String] {
+        &self.raw
+    }
+
+    /// The first (in declaration order) pattern matching `path`, which must
+    /// be normalised.
+    pub fn first_match(&self, path: &str) -> Option<&str> {
+        let mut best: Option<usize> = None;
+        for (pre, i) in &self.prefixes {
+            let hit = pre == "/"
+                || path == pre
+                || (path.starts_with(pre.as_str())
+                    && path.as_bytes().get(pre.len()) == Some(&b'/'));
+            if hit {
+                best = Some(best.map_or(*i, |b| b.min(*i)));
+                break;
+            }
+        }
+        if !self.globs.is_empty() {
+            let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+            for (g, i) in &self.globs {
+                if best.is_some_and(|b| b < *i) {
+                    break;
+                }
+                let pat: Vec<&str> = g.iter().map(|s| s.as_str()).collect();
+                if glob_segments(&pat, &segs, true) {
+                    best = Some(best.map_or(*i, |b| b.min(*i)));
+                    break;
+                }
+            }
+        }
+        best.map(|i| self.raw[i].as_str())
+    }
+
+    pub fn matches(&self, path: &str) -> bool {
+        self.first_match(path).is_some()
+    }
 }
 
 #[cfg(test)]
@@ -136,6 +215,18 @@ mod tests {
         assert!(matches("**/id_rsa*", "/x/y/id_rsa.pub"));
         assert!(matches("/proc/*/environ", "/proc/42/environ"));
         assert!(!matches("/proc/*/environ", "/proc/42/status"));
+    }
+
+    #[test]
+    fn pattern_set_matches_like_matches() {
+        let pats = ["/workspace", "**/.env", "/proc/*/environ", "/"];
+        let set = PatternSet::new(pats.iter());
+        for path in ["/workspace/a", "/x/.env", "/proc/3/environ", "/etc/passwd"] {
+            let expect = pats.iter().find(|p| matches(p, path)).copied();
+            assert_eq!(set.first_match(path), expect, "{}", path);
+        }
+        let set = PatternSet::new(["/a", "/b"].iter());
+        assert_eq!(set.first_match("/c"), None);
     }
 
     #[test]

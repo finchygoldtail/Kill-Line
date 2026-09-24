@@ -21,7 +21,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
@@ -56,13 +56,22 @@ fn unsafe_geteuid() -> u32 {
 /// Create a directory readable only by its owner (forensic data can reveal
 /// paths and host details).
 pub fn private_dir(p: &Path) -> Result<()> {
-    fs::DirBuilder::new().recursive(true).mode(0o700).create(p).with_context(|| format!("creating {}", p.display()))
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(p)
+        .with_context(|| format!("creating {}", p.display()))
 }
 
 pub fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
     let tmp = path.with_extension("tmp");
     {
-        let mut f = OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp)?;
+        let mut f = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp)?;
         f.write_all(bytes)?;
         f.sync_all().ok();
     }
@@ -88,7 +97,9 @@ pub fn chain_hash(prev: &str, event_json: &str) -> String {
 
 pub struct SessionStore {
     pub dir: PathBuf,
-    timeline: File,
+    /// Buffered; the monitor flushes at least once per second and before
+    /// every incident bundle, so a crash loses at most ~1s of timeline.
+    timeline: BufWriter<File>,
     last_hash: String,
 }
 
@@ -105,7 +116,11 @@ impl SessionStore {
             .create_new(true)
             .mode(0o600)
             .open(dir.join("timeline.jsonl"))?;
-        Ok(SessionStore { dir, timeline, last_hash: GENESIS.to_string() })
+        Ok(SessionStore {
+            dir,
+            timeline: BufWriter::with_capacity(256 * 1024, timeline),
+            last_hash: GENESIS.to_string(),
+        })
     }
 
     pub fn append(&mut self, ev: &Event) -> Result<()> {
@@ -130,7 +145,10 @@ impl SessionStore {
     }
 
     pub fn save_session(&self, s: &Session) -> Result<()> {
-        write_private(&self.dir.join("session.json"), serde_json::to_string_pretty(s)?.as_bytes())
+        write_private(
+            &self.dir.join("session.json"),
+            serde_json::to_string_pretty(s)?.as_bytes(),
+        )
     }
 }
 
@@ -163,7 +181,10 @@ pub fn list_sessions(root: &Path) -> Result<Vec<Session>> {
 /// Find a session by full id or unique prefix.
 pub fn find_session(root: &Path, id: &str) -> Result<Session> {
     let all = list_sessions(root)?;
-    let m: Vec<_> = all.into_iter().filter(|s| s.session_id.starts_with(id)).collect();
+    let m: Vec<_> = all
+        .into_iter()
+        .filter(|s| s.session_id.starts_with(id))
+        .collect();
     match m.len() {
         0 => bail!("no session matching '{}'", id),
         1 => Ok(m.into_iter().next().unwrap()),
@@ -203,17 +224,26 @@ pub fn verify_timeline(path: &Path) -> Result<VerifyReport> {
         if line.trim().is_empty() {
             continue;
         }
-        let fail = |m: String| VerifyReport { records: n, ok: false, head: String::new(), first_error: Some(format!("line {}: {}", i + 1, m)) };
+        let fail = |m: String| VerifyReport {
+            records: n,
+            ok: false,
+            head: String::new(),
+            first_error: Some(format!("line {}: {}", i + 1, m)),
+        };
         // Recover the exact event JSON as written: it is everything after
         // `"event":` up to the final closing brace.
-        let Some(idx) = line.find(",\"event\":") else { return Ok(fail("malformed record".into())) };
+        let Some(idx) = line.find(",\"event\":") else {
+            return Ok(fail("malformed record".into()));
+        };
         let event_json = &line[idx + 9..line.len() - 1];
         let rec: ChainRecord = match serde_json::from_str(line) {
             Ok(r) => r,
             Err(e) => return Ok(fail(format!("unparseable: {}", e))),
         };
         if rec.prev != prev {
-            return Ok(fail("previous-hash link broken (record removed, inserted or reordered)".into()));
+            return Ok(fail(
+                "previous-hash link broken (record removed, inserted or reordered)".into(),
+            ));
         }
         if chain_hash(&prev, event_json) != rec.hash {
             return Ok(fail("hash mismatch (record modified)".into()));
@@ -225,7 +255,12 @@ pub fn verify_timeline(path: &Path) -> Result<VerifyReport> {
         prev = rec.hash;
         n += 1;
     }
-    Ok(VerifyReport { records: n, ok: true, head: prev, first_error: None })
+    Ok(VerifyReport {
+        records: n,
+        ok: true,
+        head: prev,
+        first_error: None,
+    })
 }
 
 #[cfg(test)]
@@ -270,7 +305,11 @@ mod tests {
         assert!(r.ok && r.records == 5);
 
         let text = fs::read_to_string(&tl).unwrap();
-        fs::write(&tl, text.replacen("\"explanation\":\"x\"", "\"explanation\":\"y\"", 1)).unwrap();
+        fs::write(
+            &tl,
+            text.replacen("\"explanation\":\"x\"", "\"explanation\":\"y\"", 1),
+        )
+        .unwrap();
         assert!(!verify_timeline(&tl).unwrap().ok);
 
         let lines: Vec<&str> = text.lines().collect();

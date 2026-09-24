@@ -17,12 +17,19 @@ pub fn ns_inode(pid: u32, kind: &str) -> Result<u32> {
     let link = std::fs::read_link(format!("/proc/{}/ns/{}", pid, kind))
         .with_context(|| format!("reading /proc/{}/ns/{}", pid, kind))?;
     let s = link.to_string_lossy();
-    let inner = s.split('[').nth(1).and_then(|x| x.strip_suffix(']')).context("unexpected ns link format")?;
+    let inner = s
+        .split('[')
+        .nth(1)
+        .and_then(|x| x.strip_suffix(']'))
+        .context("unexpected ns link format")?;
     Ok(inner.parse()?)
 }
 
 fn valid_container_ref(s: &str) -> bool {
-    !s.is_empty() && s.len() <= 128 && s.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
+    !s.is_empty()
+        && s.len() <= 128
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
 }
 
 /// Look a container up through the Docker CLI. KillLine only reads
@@ -32,11 +39,21 @@ pub fn docker_container(name: &str) -> Result<ContainerInfo> {
         bail!("invalid container name or id");
     }
     let out = Command::new("docker")
-        .args(["inspect", "--type", "container", "--format", "{{.Id}} {{.Name}} {{.State.Pid}} {{.State.Running}}", name])
+        .args([
+            "inspect",
+            "--type",
+            "container",
+            "--format",
+            "{{.Id}} {{.Name}} {{.State.Pid}} {{.State.Running}}",
+            name,
+        ])
         .output()
         .context("running `docker inspect` (is the Docker CLI installed?)")?;
     if !out.status.success() {
-        bail!("docker inspect failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+        bail!(
+            "docker inspect failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
     }
     let text = String::from_utf8_lossy(&out.stdout);
     let f: Vec<&str> = text.split_whitespace().collect();
@@ -52,7 +69,12 @@ pub fn docker_container(name: &str) -> Result<ContainerInfo> {
     if Some(pidns) == host_pidns {
         bail!("container {} shares the host PID namespace (--pid=host); container scoping is impossible. Use --pid instead.", name);
     }
-    Ok(ContainerInfo { id: f[0].to_string(), name: f[1].trim_start_matches('/').to_string(), init_pid, pidns })
+    Ok(ContainerInfo {
+        id: f[0].to_string(),
+        name: f[1].trim_start_matches('/').to_string(),
+        init_pid,
+        pidns,
+    })
 }
 
 /// All current processes in a PID namespace (to seed tracking).
@@ -79,7 +101,11 @@ pub fn pid_tree(root: u32) -> Vec<u32> {
                 if let Ok(stat) = std::fs::read_to_string(format!("/proc/{}/stat", pid)) {
                     // Field 4 after the parenthesised comm.
                     if let Some(rest) = stat.rsplit_once(')').map(|(_, r)| r) {
-                        if let Some(ppid) = rest.split_whitespace().nth(1).and_then(|p| p.parse::<u32>().ok()) {
+                        if let Some(ppid) = rest
+                            .split_whitespace()
+                            .nth(1)
+                            .and_then(|p| p.parse::<u32>().ok())
+                        {
                             parent_of.push((pid, ppid));
                         }
                     }

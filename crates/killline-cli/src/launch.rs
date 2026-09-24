@@ -48,11 +48,19 @@ pub fn spawn(command: &[String], uid: Option<u32>, gid: Option<u32>) -> Result<L
     // SAFETY: we own both fds; the parent no longer needs the read end.
     unsafe { libc::close(fds[0]) };
     let release = unsafe { OwnedFd::from_raw_fd(fds[1]) };
-    Ok(Launched { child, release: Some(release) })
+    Ok(Launched {
+        child,
+        release: Some(release),
+    })
 }
 
 /// Runs in the child: wait for the monitor, drop privileges, exec.
-pub fn exec_after_release(wait_fd: i32, uid: Option<u32>, gid: Option<u32>, command: &[String]) -> Result<i32> {
+pub fn exec_after_release(
+    wait_fd: i32,
+    uid: Option<u32>,
+    gid: Option<u32>,
+    command: &[String],
+) -> Result<i32> {
     let mut b = [0u8; 1];
     // SAFETY: reading into a 1-byte buffer from an inherited fd.
     let n = unsafe { libc::read(wait_fd, b.as_mut_ptr() as *mut _, 1) };
@@ -71,7 +79,10 @@ pub fn exec_after_release(wait_fd: i32, uid: Option<u32>, gid: Option<u32>, comm
             bail!("setuid({}) failed: {}", u, std::io::Error::last_os_error());
         }
     }
-    let args: Vec<CString> = command.iter().map(|a| CString::new(a.as_str())).collect::<Result<_, _>>()?;
+    let args: Vec<CString> = command
+        .iter()
+        .map(|a| CString::new(a.as_str()))
+        .collect::<Result<_, _>>()?;
     let mut argv: Vec<*const libc::c_char> = args.iter().map(|a| a.as_ptr()).collect();
     argv.push(std::ptr::null());
     // SAFETY: argv is NULL-terminated and outlives the call.

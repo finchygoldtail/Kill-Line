@@ -2,7 +2,7 @@
 
 use anyhow::{bail, Result};
 use chrono::{Local, Utc};
-use killline_core::event::{Event, ObsKind, Outcome, Verdict};
+use killline_core::event::{Event, FileAccess, ObsKind, Outcome, Verdict};
 use killline_core::incident::{self, list_incidents};
 use killline_core::policy::ResponseAction;
 use killline_core::session::{Session, Status};
@@ -56,11 +56,16 @@ fn status_color(s: Status) -> &'static str {
 /// Strip control characters from anything that originated in the agent
 /// (paths, comm, argv) so it cannot inject terminal escape sequences.
 pub fn clean(s: &str) -> String {
-    s.chars().map(|c| if c.is_control() { '?' } else { c }).collect()
+    s.chars()
+        .map(|c| if c.is_control() { '?' } else { c })
+        .collect()
 }
 
 fn time(ev: &Event) -> String {
-    ev.timestamp.with_timezone(&Local).format("%H:%M:%S%.3f").to_string()
+    ev.timestamp
+        .with_timezone(&Local)
+        .format("%H:%M:%S%.3f")
+        .to_string()
 }
 
 fn rule() -> String {
@@ -76,7 +81,10 @@ pub fn banner_start(s: &Session, policy_path: &str) {
     say!("Session:   {}", s.session_id);
     say!("Response:  {}", response_text(&s.response_mode));
     say!();
-    say!("Status:    {}", paint(s.status.label(), status_color(s.status)));
+    say!(
+        "Status:    {}",
+        paint(s.status.label(), status_color(s.status))
+    );
     say!("           {}", paint(s.status.meaning(), DIM));
     say!();
 }
@@ -93,7 +101,10 @@ pub fn banner_end(s: &Session, reason: &str) {
     say!();
     say!("{}", paint(&rule(), status_color(s.status)));
     say!("KillLine monitoring stopped ({})", reason);
-    say!("Status:            {}", paint(s.status.label(), status_color(s.status)));
+    say!(
+        "Status:            {}",
+        paint(s.status.label(), status_color(s.status))
+    );
     say!("                   {}", s.status.meaning());
     say!("Runtime:           {}", s.runtime(Utc::now()));
     say!("Events recorded:   {}", s.events);
@@ -103,7 +114,10 @@ pub fn banner_end(s: &Session, reason: &str) {
     say!("Policy violations: {}{}", s.violations, breakdown(s));
     say!("Anomalies:         {}", s.anomalies);
     if s.dropped_events > 0 {
-        say!("Dropped events:    {}", paint(&s.dropped_events.to_string(), RED));
+        say!(
+            "Dropped events:    {}",
+            paint(&s.dropped_events.to_string(), RED)
+        );
     }
     for r in &s.degraded_reasons {
         say!("Degraded:          {}", paint(r, GREY));
@@ -128,7 +142,10 @@ fn breakdown(s: &Session) -> String {
 
 pub fn status_change(s: &Session) {
     say!();
-    say!("Status:    {}", paint(s.status.label(), status_color(s.status)));
+    say!(
+        "Status:    {}",
+        paint(s.status.label(), status_color(s.status))
+    );
     say!("           {}", paint(s.status.meaning(), DIM));
     for r in &s.degraded_reasons {
         say!("           {}", paint(r, GREY));
@@ -140,12 +157,11 @@ pub fn describe(ev: &Event) -> String {
     let what = clean(&ev.resource_summary());
     match (&ev.observation, ev.action.as_str()) {
         (Some(ObsKind::Exec { .. }), _) => format!("Spawned: {}", what),
-        (Some(ObsKind::Open { path, .. }), a) => {
-            let verb = match a {
-                "file.write" | "file.write_outside_boundary" => "Write",
-                "file.list" => "List",
-                "file.opened" => "Opened",
-                _ if ev.explanation.contains(" to write ") => "Write",
+        (Some(ObsKind::Open { path, access, .. }), a) => {
+            let verb = match (a, access) {
+                ("file.opened", _) => "Opened",
+                (_, FileAccess::Write) => "Write",
+                (_, FileAccess::List) => "List",
                 _ => "Read",
             };
             format!("{}: {}", verb, clean(path))
@@ -167,16 +183,20 @@ fn marker(ev: &Event) -> String {
 }
 
 fn proc_tag(ev: &Event) -> String {
-    ev.process.as_ref().map(|p| format!("[{} {}]", clean(&p.comm), p.pid)).unwrap_or_default()
+    ev.process
+        .as_ref()
+        .map(|p| format!("[{} {}]", clean(&p.comm), p.pid))
+        .unwrap_or_default()
 }
 
 fn outcome_tag(o: Option<&Outcome>) -> String {
     match o {
         Some(Outcome::Succeeded) => String::new(),
         Some(Outcome::InProgress) => paint(" (in progress)", DIM),
-        Some(Outcome::Failed { error, .. }) => {
-            paint(&format!(" (failed: {})", error.split(' ').next().unwrap_or("")), DIM)
-        }
+        Some(Outcome::Failed { error, .. }) => paint(
+            &format!(" (failed: {})", error.split(' ').next().unwrap_or("")),
+            DIM,
+        ),
         None => String::new(),
     }
 }
@@ -185,17 +205,27 @@ fn outcome_tag(o: Option<&Outcome>) -> String {
 fn outcome_line(o: Option<&Outcome>) -> String {
     match o {
         Some(Outcome::Succeeded) => paint("SUCCEEDED — the boundary was actually crossed", RED),
-        Some(f @ Outcome::Failed { error, .. }) if f.refused() => {
-            paint(&format!("REFUSED by the OS ({}) — the sandbox held this time", error), AMBER)
-        }
+        Some(f @ Outcome::Failed { error, .. }) if f.refused() => paint(
+            &format!("REFUSED by the OS ({}) — the sandbox held this time", error),
+            AMBER,
+        ),
         Some(Outcome::Failed { error, .. }) => format!("failed ({})", error),
-        Some(Outcome::InProgress) => "connection started (non-blocking); completion not observed".into(),
+        Some(Outcome::InProgress) => {
+            "connection started (non-blocking); completion not observed".into()
+        }
         None => "not observed".into(),
     }
 }
 
 pub fn timeline_line(ev: &Event) -> String {
-    format!("{} {} {:<22} {}{}", paint(&time(ev), DIM), marker(ev), proc_tag(ev), describe(ev), outcome_tag(ev.outcome.as_ref()))
+    format!(
+        "{} {} {:<22} {}{}",
+        paint(&time(ev), DIM),
+        marker(ev),
+        proc_tag(ev),
+        describe(ev),
+        outcome_tag(ev.outcome.as_ref())
+    )
 }
 
 fn is_noise(ev: &Event) -> bool {
@@ -220,8 +250,12 @@ pub fn print_event(ev: &Event, verbose: u8) {
     }
     let show = match verbose {
         0 if ev.action == "process.exec_not_found" => false,
-        0 => matches!(ev.observation, Some(ObsKind::Exec { .. }) | Some(ObsKind::Net { .. }) | Some(ObsKind::Dns { .. }))
-            || ev.verdict == Verdict::Notice,
+        0 => {
+            matches!(
+                ev.observation,
+                Some(ObsKind::Exec { .. }) | Some(ObsKind::Net { .. }) | Some(ObsKind::Dns { .. })
+            ) || ev.verdict == Verdict::Notice
+        }
         1 => !is_noise(ev),
         _ => true,
     };
@@ -243,8 +277,18 @@ pub fn alert_block(s: &Session, ev: &Event, response: &ResponseAction, incident:
     }
     say!(" Actual:    {}", describe(ev));
     if let Some(p) = &ev.process {
-        let exe = p.exe.as_deref().map(|e| format!(", {}", clean(e))).unwrap_or_default();
-        say!(" Process:   {} (pid {}, uid {}{})", clean(&p.comm), p.pid, p.uid, exe);
+        let exe = p
+            .exe
+            .as_deref()
+            .map(|e| format!(", {}", clean(e)))
+            .unwrap_or_default();
+        say!(
+            " Process:   {} (pid {}, uid {}{})",
+            clean(&p.comm),
+            p.pid,
+            p.uid,
+            exe
+        );
     }
     if let Some(rl) = &ev.policy_rule {
         say!(" Rule:      {}", rl);
@@ -269,12 +313,20 @@ pub fn alert_block(s: &Session, ev: &Event, response: &ResponseAction, incident:
 
 /// A violation identical to one already reported in this session.
 pub fn repeat_line(ev: &Event) {
-    say!("{} {}", timeline_line(ev), paint("(repeat violation; recorded in timeline)", RED));
+    say!(
+        "{} {}",
+        timeline_line(ev),
+        paint("(repeat violation; recorded in timeline)", RED)
+    );
 }
 
 pub fn anomaly_block(ev: &Event) {
     say!();
-    say!("{} {}", paint("AMBER — BEHAVIOURAL ANOMALY", AMBER), paint(&time(ev), DIM));
+    say!(
+        "{} {}",
+        paint("AMBER — BEHAVIOURAL ANOMALY", AMBER),
+        paint(&time(ev), DIM)
+    );
     say!(" {}", clean(&ev.explanation));
     for c in &ev.correlations {
         say!(" {} {}", paint("↳", AMBER), c.summary);
@@ -284,7 +336,9 @@ pub fn anomaly_block(ev: &Event) {
 fn pick_session(root: &Path, id: Option<&str>) -> Result<Session> {
     match id {
         Some(id) => find_session(root, id),
-        None => list_sessions(root)?.pop().ok_or_else(|| anyhow::anyhow!("no sessions recorded in {}", root.display())),
+        None => list_sessions(root)?
+            .pop()
+            .ok_or_else(|| anyhow::anyhow!("no sessions recorded in {}", root.display())),
     }
 }
 
@@ -302,7 +356,11 @@ pub fn status(root: &Path, id: Option<&str>, watch: bool) -> Result<i32> {
         say!("Session:           {}", s.session_id);
         say!("Status:            {}", paint(st.label(), status_color(st)));
         say!("                   {}", st.meaning());
-        say!("Runtime:           {}{}", s.runtime(Utc::now()), if s.ended.is_some() { " (ended)" } else { "" });
+        say!(
+            "Runtime:           {}{}",
+            s.runtime(Utc::now()),
+            if s.ended.is_some() { " (ended)" } else { "" }
+        );
         say!("Processes:         {}", s.processes_seen);
         say!("Files accessed:    {}", s.files_accessed);
         say!("Network attempts:  {}", s.network_attempts);
@@ -345,7 +403,16 @@ pub fn sessions(root: &Path) -> Result<i32> {
         say!("No sessions recorded in {}", root.display());
         return Ok(0);
     }
-    say!("{:<30} {:<18} {:<28} {:>8} {:>6} {:>5}  {}", "SESSION", "AGENT", "STATUS", "RUNTIME", "EVENTS", "VIOL", "TARGET");
+    say!(
+        "{:<30} {:<18} {:<28} {:>8} {:>6} {:>5}  {}",
+        "SESSION",
+        "AGENT",
+        "STATUS",
+        "RUNTIME",
+        "EVENTS",
+        "VIOL",
+        "TARGET"
+    );
     let now = Utc::now();
     for s in all {
         let (st, _) = s.effective_status(now);
@@ -366,10 +433,20 @@ pub fn sessions(root: &Path) -> Result<i32> {
 pub fn incidents(root: &Path) -> Result<i32> {
     let all = list_incidents(root)?;
     if all.is_empty() {
-        say!("No incidents recorded in {}", store::incidents_dir(root).display());
+        say!(
+            "No incidents recorded in {}",
+            store::incidents_dir(root).display()
+        );
         return Ok(0);
     }
-    say!("{:<26} {:<20} {:<16} {:<30} {}", "INCIDENT", "TIME", "AGENT", "BOUNDARY", "ACTUAL");
+    say!(
+        "{:<26} {:<20} {:<16} {:<30} {}",
+        "INCIDENT",
+        "TIME",
+        "AGENT",
+        "BOUNDARY",
+        "ACTUAL"
+    );
     for i in all {
         say!(
             "{:<26} {:<20} {:<16} {:<30} {}",
@@ -385,7 +462,8 @@ pub fn incidents(root: &Path) -> Result<i32> {
 
 pub fn inspect(root: &Path, id: &str, raw: bool) -> Result<i32> {
     let dir = incident::incident_dir(root, id)?;
-    let inc: incident::Incident = serde_json::from_str(&std::fs::read_to_string(dir.join("incident.json"))?)?;
+    let inc: incident::Incident =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("incident.json"))?)?;
     if raw {
         say!("{}", serde_json::to_string_pretty(&inc.trigger)?);
         return Ok(0);
@@ -408,7 +486,13 @@ pub fn inspect(root: &Path, id: &str, raw: bool) -> Result<i32> {
         say!(" Rule:      {}", rl);
     }
     say!(" Result:    {}", outcome_line(inc.trigger.outcome.as_ref()));
-    say!(" Time:      {}", inc.trigger.timestamp.with_timezone(&Local).format("%Y-%m-%d %H:%M:%S%.3f"));
+    say!(
+        " Time:      {}",
+        inc.trigger
+            .timestamp
+            .with_timezone(&Local)
+            .format("%Y-%m-%d %H:%M:%S%.3f")
+    );
     for resp in &inc.response {
         say!(" Response:  {}", resp);
     }
@@ -422,22 +506,50 @@ pub fn inspect(root: &Path, id: &str, raw: bool) -> Result<i32> {
     let tl = read_timeline_file(&dir.join("timeline.jsonl"))?;
     let trig = inc.trigger.seq;
     let before: Vec<&Event> = tl.iter().filter(|e| e.seq < trig && !is_noise(e)).collect();
-    let after: Vec<&Event> = tl.iter().filter(|e| e.seq > trig && !is_noise(e)).take(15).collect();
+    let after: Vec<&Event> = tl
+        .iter()
+        .filter(|e| e.seq > trig && !is_noise(e))
+        .take(15)
+        .collect();
     say!();
-    say!("{}", paint(" Timeline (most recent 25 notable events before the breach)", BOLD));
+    say!(
+        "{}",
+        paint(
+            " Timeline (most recent 25 notable events before the breach)",
+            BOLD
+        )
+    );
     for e in before.iter().rev().take(25).rev() {
         say!("   {}", timeline_line(e));
     }
-    say!("   {}", paint(&format!("{}  KILLLINE TRIGGERED — {}", time(&inc.trigger), inc.boundary), RED));
+    say!(
+        "   {}",
+        paint(
+            &format!(
+                "{}  KILLLINE TRIGGERED — {}",
+                time(&inc.trigger),
+                inc.boundary
+            ),
+            RED
+        )
+    );
     for e in after {
         say!("   {}", timeline_line(e));
     }
     say!();
     let bad = incident::verify_checksums(&dir)?;
     if bad.is_empty() {
-        say!(" Bundle:    {} ({} files, checksums OK)", dir.display(), incident::FILES.len() + 1);
+        say!(
+            " Bundle:    {} ({} files, checksums OK)",
+            dir.display(),
+            incident::FILES.len() + 1
+        );
     } else {
-        say!(" Bundle:    {} {}", dir.display(), paint(&format!("CHECKSUM MISMATCH: {}", bad.join(", ")), RED));
+        say!(
+            " Bundle:    {} {}",
+            dir.display(),
+            paint(&format!("CHECKSUM MISMATCH: {}", bad.join(", ")), RED)
+        );
     }
     say!(" Raw event: killline inspect {} --raw", inc.incident_id);
     for n in &inc.notes {
@@ -448,18 +560,31 @@ pub fn inspect(root: &Path, id: &str, raw: bool) -> Result<i32> {
 
 fn read_timeline_file(p: &Path) -> Result<Vec<Event>> {
     let text = std::fs::read_to_string(p)?;
-    text.lines().filter(|l| !l.trim().is_empty()).map(|l| Ok(serde_json::from_str(l)?)).collect()
+    text.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| Ok(serde_json::from_str(l)?))
+        .collect()
 }
 
 pub fn timeline(root: &Path, id: Option<&str>, all: bool, json: bool) -> Result<i32> {
     let s = pick_session(root, id)?;
-    let path = store::sessions_dir(root).join(&s.session_id).join("timeline.jsonl");
+    let path = store::sessions_dir(root)
+        .join(&s.session_id)
+        .join("timeline.jsonl");
     if json {
         print!("{}", std::fs::read_to_string(&path)?);
         return Ok(0);
     }
     let events = read_timeline(&path)?;
-    say!("Session {}  agent {}  {}", s.session_id, clean(&s.agent), paint(s.effective_status(Utc::now()).0.label(), status_color(s.status)));
+    say!(
+        "Session {}  agent {}  {}",
+        s.session_id,
+        clean(&s.agent),
+        paint(
+            s.effective_status(Utc::now()).0.label(),
+            status_color(s.status)
+        )
+    );
     let mut hidden = 0;
     for e in &events {
         if !all && is_noise(e) {
@@ -468,7 +593,16 @@ pub fn timeline(root: &Path, id: Option<&str>, all: bool, json: bool) -> Result<
         }
         say!("{}", timeline_line(e));
         if e.verdict == Verdict::Violation && e.confirms_seq.is_none() {
-            say!("{}", paint(&format!("             KILLLINE TRIGGERED — {}", e.category.boundary_name()), RED));
+            say!(
+                "{}",
+                paint(
+                    &format!(
+                        "             KILLLINE TRIGGERED — {}",
+                        e.category.boundary_name()
+                    ),
+                    RED
+                )
+            );
             say!("             {}", clean(&e.explanation));
             for c in &e.correlations {
                 say!("             {} {}", paint("↳", AMBER), c.summary);
@@ -476,7 +610,13 @@ pub fn timeline(root: &Path, id: Option<&str>, all: bool, json: bool) -> Result<
         }
     }
     if hidden > 0 {
-        say!("{}", paint(&format!("({} runtime/bookkeeping events hidden; use --all)", hidden), DIM));
+        say!(
+            "{}",
+            paint(
+                &format!("({} runtime/bookkeeping events hidden; use --all)", hidden),
+                DIM
+            )
+        );
     }
     Ok(0)
 }
@@ -489,17 +629,39 @@ pub fn verify(root: &Path, id: &str) -> Result<i32> {
             say!("{}: all checksums match", id);
             return Ok(0);
         }
-        say!("{}: {}", id, paint(&format!("MODIFIED: {}", bad.join(", ")), RED));
+        say!(
+            "{}: {}",
+            id,
+            paint(&format!("MODIFIED: {}", bad.join(", ")), RED)
+        );
         return Ok(1);
     }
     let s = find_session(root, id)?;
-    let path = store::sessions_dir(root).join(&s.session_id).join("timeline.jsonl");
+    let path = store::sessions_dir(root)
+        .join(&s.session_id)
+        .join("timeline.jsonl");
     let r = verify_timeline(&path)?;
     if r.ok {
-        say!("{}: hash chain intact ({} records, head {})", s.session_id, r.records, &r.head[..16]);
+        say!(
+            "{}: hash chain intact ({} records, head {})",
+            s.session_id,
+            r.records,
+            &r.head[..16]
+        );
         Ok(0)
     } else {
-        say!("{}: {}", s.session_id, paint(&format!("CHAIN BROKEN after {} records: {}", r.records, r.first_error.unwrap_or_default()), RED));
+        say!(
+            "{}: {}",
+            s.session_id,
+            paint(
+                &format!(
+                    "CHAIN BROKEN after {} records: {}",
+                    r.records,
+                    r.first_error.unwrap_or_default()
+                ),
+                RED
+            )
+        );
         bail!("timeline integrity check failed")
     }
 }

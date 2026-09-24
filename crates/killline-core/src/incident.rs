@@ -77,7 +77,13 @@ pub fn next_incident_id(root: &Path, now: DateTime<Utc>) -> Result<(String, Path
 }
 
 impl PendingIncident {
-    pub fn new(root: &Path, session: &Session, trigger: &Event, before: Vec<Event>, head: &str) -> Result<PendingIncident> {
+    pub fn new(
+        root: &Path,
+        session: &Session,
+        trigger: &Event,
+        before: Vec<Event>,
+        head: &str,
+    ) -> Result<PendingIncident> {
         let now = Utc::now();
         let (id, dir) = next_incident_id(root, now)?;
         let incident = Incident {
@@ -103,10 +109,21 @@ impl PendingIncident {
                 "timeline_head_hash anchors this bundle to the session's hash-chained timeline.".into(),
             ],
         };
-        Ok(PendingIncident { dir, incident, before, after: vec![], deadline: now + chrono::Duration::seconds(5) })
+        Ok(PendingIncident {
+            dir,
+            incident,
+            before,
+            after: vec![],
+            deadline: now + chrono::Duration::seconds(5),
+        })
     }
 
-    pub fn write(&self, session: &Session, policy_text: &str, system: &serde_json::Value) -> Result<()> {
+    pub fn write(
+        &self,
+        session: &Session,
+        policy_text: &str,
+        system: &serde_json::Value,
+    ) -> Result<()> {
         let d = &self.dir;
         let all: Vec<&Event> = self.before.iter().chain(self.after.iter()).collect();
         let mut tl = String::new();
@@ -117,21 +134,49 @@ impl PendingIncident {
         let mut inc = self.incident.clone();
         inc.events_after_trigger = self.after.len();
         inc.response = session.response_taken.clone();
-        write_private(&d.join("incident.json"), serde_json::to_string_pretty(&inc)?.as_bytes())?;
+        write_private(
+            &d.join("incident.json"),
+            serde_json::to_string_pretty(&inc)?.as_bytes(),
+        )?;
         write_private(&d.join("timeline.jsonl"), tl.as_bytes())?;
-        write_private(&d.join("process_tree.json"), serde_json::to_string_pretty(&process_tree(&session.process_table))?.as_bytes())?;
+        write_private(
+            &d.join("process_tree.json"),
+            serde_json::to_string_pretty(&process_tree(&session.process_table))?.as_bytes(),
+        )?;
         let net: Vec<&&Event> = all
             .iter()
-            .filter(|e| matches!(e.category, Category::Network | Category::Dns | Category::CloudMetadata | Category::ContainerRuntime))
+            .filter(|e| {
+                matches!(
+                    e.category,
+                    Category::Network
+                        | Category::Dns
+                        | Category::CloudMetadata
+                        | Category::ContainerRuntime
+                )
+            })
             .collect();
-        write_private(&d.join("network_events.json"), serde_json::to_string_pretty(&net)?.as_bytes())?;
+        write_private(
+            &d.join("network_events.json"),
+            serde_json::to_string_pretty(&net)?.as_bytes(),
+        )?;
         let fs_ev: Vec<&&Event> = all
             .iter()
-            .filter(|e| matches!(e.category, Category::Filesystem | Category::Credential | Category::ContainerEscape))
+            .filter(|e| {
+                matches!(
+                    e.category,
+                    Category::Filesystem | Category::Credential | Category::ContainerEscape
+                )
+            })
             .collect();
-        write_private(&d.join("filesystem_events.json"), serde_json::to_string_pretty(&fs_ev)?.as_bytes())?;
+        write_private(
+            &d.join("filesystem_events.json"),
+            serde_json::to_string_pretty(&fs_ev)?.as_bytes(),
+        )?;
         write_private(&d.join("policy.yaml"), policy_text.as_bytes())?;
-        write_private(&d.join("system_metadata.json"), serde_json::to_string_pretty(system)?.as_bytes())?;
+        write_private(
+            &d.join("system_metadata.json"),
+            serde_json::to_string_pretty(system)?.as_bytes(),
+        )?;
         write_checksums(d)?;
         Ok(())
     }
@@ -151,7 +196,9 @@ pub fn verify_checksums(dir: &Path) -> Result<Vec<String>> {
     let text = fs::read_to_string(dir.join("checksums.txt"))?;
     let mut bad = Vec::new();
     for line in text.lines() {
-        let Some((sum, name)) = line.split_once("  ") else { continue };
+        let Some((sum, name)) = line.split_once("  ") else {
+            continue;
+        };
         match fs::read(dir.join(name)) {
             Ok(b) if hex::encode(Sha256::digest(&b)) == sum => {}
             _ => bad.push(name.to_string()),
@@ -172,9 +219,16 @@ pub fn process_tree(table: &BTreeMap<u32, ProcessRecord>) -> Vec<TreeNode> {
         let children = if depth > 64 {
             vec![]
         } else {
-            table.values().filter(|p| p.ppid == pid && p.pid != pid).map(|p| build(p.pid, table, depth + 1)).collect()
+            table
+                .values()
+                .filter(|p| p.ppid == pid && p.pid != pid)
+                .map(|p| build(p.pid, table, depth + 1))
+                .collect()
         };
-        TreeNode { process: table[&pid].clone(), children }
+        TreeNode {
+            process: table[&pid].clone(),
+            children,
+        }
     }
     table
         .values()
@@ -207,7 +261,11 @@ pub fn incident_dir(root: &Path, id: &str) -> Result<PathBuf> {
     }
     let d = store::incidents_dir(root).join(id);
     if !d.join("incident.json").exists() {
-        anyhow::bail!("no incident '{}' in {}", id, store::incidents_dir(root).display());
+        anyhow::bail!(
+            "no incident '{}' in {}",
+            id,
+            store::incidents_dir(root).display()
+        );
     }
     Ok(d)
 }

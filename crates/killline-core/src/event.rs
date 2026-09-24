@@ -168,7 +168,10 @@ impl Outcome {
             Outcome::InProgress
         } else {
             let errno = (-ret) as i32;
-            Outcome::Failed { errno, error: errno_name(errno) }
+            Outcome::Failed {
+                errno,
+                error: errno_name(errno),
+            }
         }
     }
 
@@ -370,7 +373,9 @@ impl ObsKind {
             }
             ObsKind::Fork { child_pid } => format!("child pid {}", child_pid),
             ObsKind::Exit => "process exited".into(),
-            ObsKind::Open { path, access, .. } => format!("{:?} {}", access, path).to_lowercase_first(),
+            ObsKind::Open { path, access, .. } => {
+                format!("{:?} {}", access, path).to_lowercase_first()
+            }
             ObsKind::Unlink { path } => format!("delete {}", path),
             ObsKind::Rename { from, to } => format!("rename {} -> {}", from, to),
             ObsKind::Chmod { path, mode } => format!("chmod {:o} {}", mode, path),
@@ -393,7 +398,9 @@ impl ObsKind {
                 query.as_deref().unwrap_or("<unknown name>"),
                 server.map(|s| format!(" via {}", s)).unwrap_or_default()
             ),
-            ObsKind::Socket { family, sock_type, .. } => {
+            ObsKind::Socket {
+                family, sock_type, ..
+            } => {
                 format!("socket(family={}, type={})", family, sock_type & 0xf)
             }
             ObsKind::Mount { source, target, .. } => format!("mount {} on {}", source, target),
@@ -402,10 +409,15 @@ impl ObsKind {
             ObsKind::Capset { effective, .. } => format!("capset effective={:#x}", effective),
             ObsKind::Unshare { flags } => format!("unshare(flags={:#x})", flags),
             ObsKind::Setns { nstype } => format!("setns(nstype={:#x})", nstype),
-            ObsKind::Ptrace { request, target_pid } => {
+            ObsKind::Ptrace {
+                request,
+                target_pid,
+            } => {
                 format!("ptrace(request={}, pid={})", request, target_pid)
             }
-            ObsKind::Kill { target_pid, signal } => format!("kill(pid={}, sig={})", target_pid, signal),
+            ObsKind::Kill { target_pid, signal } => {
+                format!("kill(pid={}, sig={})", target_pid, signal)
+            }
             ObsKind::Bpf { cmd } => format!("bpf(cmd={})", cmd),
             ObsKind::ModuleLoad => "kernel module load".into(),
             ObsKind::Chroot { path } => format!("chroot {}", path),

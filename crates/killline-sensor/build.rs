@@ -12,7 +12,10 @@ fn main() {
     let src = root.join("killline.bpf.c");
     let out = PathBuf::from(env::var("OUT_DIR").unwrap()).join("killline.bpf.o");
     println!("cargo:rerun-if-changed={}", src.display());
-    println!("cargo:rerun-if-changed={}", root.join("vmlinux_min.h").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        root.join("vmlinux_min.h").display()
+    );
     println!("cargo:rerun-if-env-changed=KILLLINE_CLANG");
     println!("cargo:rustc-check-cfg=cfg(killline_no_bpf)");
 
