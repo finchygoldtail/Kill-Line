@@ -163,7 +163,7 @@ def docker_socket():
         except OSError as e:
             log(f"failed as expected: {e}")
         return
-    log("attempting to connect to /var/run/docker.sock (CI provides a harmless stand-in)")
+    log("attempting to connect to /var/run/docker.sock (expected to be absent)")
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         s.connect("/var/run/docker.sock")
