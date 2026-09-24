@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **`killline ui`**: a local, offline, dark dashboard served by the killline binary on 127.0.0.1, protected by a token and host checks, with a strict CSP. It has session list and status panels, live stats, a live timeline with read bursts collapsed, and an "every breach" list with crossed/held results. Incident drawers show the pre-breach timeline, process tree and checksum verification. There is a sensor-coverage view; you can start monitoring a container or process with a policy template (validated live) and freeze, resume, terminate or stop an agent.
+- `killline inspect` collapses runs of similar file reads.
+- Operator control channel (`control.json`) and `resume` response; sessions record whether the agent is frozen.
+- Terminal demo recording (`docs/demo/killline-demo.cast`) and `test-lab/narrated-demo.sh`.
+
 ## 0.1.0: first vertical slice (2026-09-24)
 
 Milestone: *independently detect a simple AI-agent containment boundary crossing in real time and reconstruct exactly what happened.*

@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KillLine</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand" aria-label="KillLine">
+    <span class="signal" aria-hidden="true"><span class="beam"></span></span>
+    <span class="wordmark">KILL<b>LINE</b></span>
+    <span class="tag">Independent containment verification</span>
+  </div>
+  <div class="host" id="host">…</div>
+  <button class="btn primary" id="btn-start" type="button">Start monitoring</button>
+</header>
+
+<div class="shell">
+  <nav class="rail" aria-label="Monitoring sessions">
+    <div class="rail-head">
+      <h2>Sessions</h2>
+      <span class="count" id="session-count">0</span>
+    </div>
+    <ol id="sessions" class="sessions"></ol>
+    <p class="rail-empty" id="sessions-empty" hidden>No sessions yet. Start monitoring a container or process to see it here.</p>
+  </nav>
+
+  <main id="main">
+    <section id="welcome" class="welcome" hidden>
+      <h1>Nothing is being watched yet</h1>
+      <p>KillLine checks an AI agent from outside its sandbox. Pick a running container or process, choose a containment policy, and KillLine reports every attempt to cross it.</p>
+      <button class="btn primary" type="button" id="btn-start-2">Start monitoring</button>
+    </section>
+
+    <section id="detail" hidden>
+      <div class="status-panel" id="status-panel">
+        <div class="status-band"></div>
+        <div class="status-body">
+          <div class="status-top">
+            <div>
+              <div class="eyebrow" id="st-agent">Agent</div>
+              <div class="status-word" id="st-word">GREEN</div>
+              <div class="status-sub" id="st-sub">CONTAINED</div>
+            </div>
+            <div class="status-meta">
+              <div><span>Target</span><b id="st-target"></b></div>
+              <div><span>Policy</span><b id="st-policy"></b></div>
+              <div><span>Session</span><b id="st-session" class="mono"></b></div>
+              <div><span>Response</span><b id="st-response"></b></div>
+            </div>
+          </div>
+          <p class="status-meaning" id="st-meaning"></p>
+          <ul class="reasons" id="st-reasons"></ul>
+          <div class="stats">
+            <div class="stat"><span>Runtime</span><b id="n-runtime">00:00:00</b></div>
+            <div class="stat"><span>Processes</span><b id="n-proc">0</b></div>
+            <div class="stat"><span>Files accessed</span><b id="n-files">0</b></div>
+            <div class="stat"><span>Network attempts</span><b id="n-net">0</b></div>
+            <div class="stat"><span>Violations</span><b id="n-viol">0</b></div>
+            <div class="stat"><span>Anomalies</span><b id="n-anom">0</b></div>
+          </div>
+          <div class="controls" id="controls">
+            <button class="btn" type="button" data-action="freeze" id="btn-freeze">Freeze agent</button>
+            <button class="btn" type="button" data-action="resume" id="btn-resume" hidden>Resume agent</button>
+            <button class="btn danger" type="button" data-action="terminate" id="btn-terminate">Terminate agent</button>
+            <button class="btn ghost" type="button" data-action="stop" id="btn-stop">Stop monitoring</button>
+          </div>
+          <div class="confirm" id="confirm" hidden>
+            <span id="confirm-text"></span>
+            <button class="btn danger" type="button" id="confirm-yes">Confirm</button>
+            <button class="btn ghost" type="button" id="confirm-no">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="breach" id="breach" hidden>
+        <div class="breach-head">
+          <span class="breach-title">KILLLINE TRIGGERED</span>
+          <span class="breach-latest">Latest breach</span>
+          <span class="breach-time mono" id="br-time"></span>
+        </div>
+        <div class="breach-grid">
+          <div><span>Boundary</span><b id="br-boundary"></b></div>
+          <div><span>Expected</span><b id="br-expected"></b></div>
+          <div><span>Actual</span><b id="br-actual" class="mono"></b></div>
+          <div><span>Process</span><b id="br-process" class="mono"></b></div>
+          <div><span>Result</span><b id="br-result"></b></div>
+          <div><span>Rule</span><b id="br-rule" class="mono"></b></div>
+        </div>
+        <p class="breach-expl" id="br-expl"></p>
+        <button class="btn" type="button" id="btn-view-incident">View incident</button>
+        <div class="all-breaches" id="all-breaches" hidden>
+          <h3>Every breach in this session</h3>
+          <ol id="breach-list"></ol>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button role="tab" class="tab on" data-tab="timeline" type="button">Timeline</button>
+        <button role="tab" class="tab" data-tab="incidents" type="button">Incidents <span class="count" id="inc-count">0</span></button>
+        <button role="tab" class="tab" data-tab="coverage" type="button">Sensor coverage</button>
+      </div>
+
+      <section class="tabpanel" id="tab-timeline">
+        <div class="filters">
+          <label for="filter">Show</label>
+          <select id="filter">
+            <option value="notable">Notable events</option>
+            <option value="alerts">Alerts only</option>
+            <option value="all">Everything (including runtime reads)</option>
+          </select>
+          <label class="check"><input type="checkbox" id="follow" checked> Follow live</label>
+          <span class="muted" id="tl-count"></span>
+        </div>
+        <ol class="timeline" id="timeline"></ol>
+      </section>
+
+      <section class="tabpanel" id="tab-incidents" hidden>
+        <ol class="incidents" id="incidents"></ol>
+      </section>
+
+      <section class="tabpanel" id="tab-coverage" hidden>
+        <p class="muted">What KillLine can see on this machine. Missing sources are reported, never hidden.</p>
+        <ul class="coverage" id="coverage"></ul>
+      </section>
+    </section>
+  </main>
+</div>
+
+<div class="scrim" id="drawer" hidden>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="inc-title">
+    <div class="drawer-head">
+      <div>
+        <div class="eyebrow">Incident</div>
+        <h2 id="inc-title" class="mono"></h2>
+      </div>
+      <button class="btn ghost" type="button" id="drawer-close">Close</button>
+    </div>
+    <div id="inc-body"></div>
+  </aside>
+</div>
+
+<div class="scrim" id="start-dialog" hidden>
+  <form class="dialog" id="start-form" aria-labelledby="start-title" novalidate>
+    <h2 id="start-title">Start monitoring</h2>
+    <fieldset>
+      <legend>What to watch</legend>
+      <div class="seg">
+        <label><input type="radio" name="kind" value="container" id="kind-container" checked> A container</label>
+        <label><input type="radio" name="kind" value="pid" id="kind-pid"> A process</label>
+      </div>
+      <div id="pick-container">
+        <label for="container">Running container</label>
+        <select id="container"></select>
+        <p class="hint" id="container-hint"></p>
+      </div>
+      <div id="pick-pid" hidden>
+        <label for="pid">Process ID (it and everything it starts)</label>
+        <input id="pid" inputmode="numeric" placeholder="e.g. 4312">
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Containment policy</legend>
+      <label for="template">Template</label>
+      <select id="template"></select>
+      <p class="hint" id="template-desc"></p>
+      <details>
+        <summary>View or edit the policy</summary>
+        <textarea id="policy-text" rows="14" spellcheck="false"></textarea>
+      </details>
+      <ul class="diags" id="diags"></ul>
+    </fieldset>
+    <fieldset>
+      <legend>When a boundary is crossed</legend>
+      <select id="response">
+        <option value="alert">Alert only (recommended while you evaluate)</option>
+        <option value="freeze">Freeze the agent so you can inspect it</option>
+        <option value="terminate">Terminate the agent</option>
+      </select>
+    </fieldset>
+    <p class="form-error" id="start-error" hidden></p>
+    <div class="dialog-actions">
+      <button class="btn ghost" type="button" id="start-cancel">Cancel</button>
+      <button class="btn primary" type="submit" id="start-go">Start monitoring</button>
+    </div>
+  </form>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<div class="locked" id="locked" hidden>
+  <div>
+    <h1>Access token needed</h1>
+    <p>Open the full link printed by <code>killline ui</code> in your terminal. It ends with <code>#</code> and a token, which keeps other websites from reading your data.</p>
+  </div>
+</div>
+</body>
+</html>

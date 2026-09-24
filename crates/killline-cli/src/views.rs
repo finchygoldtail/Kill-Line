@@ -228,7 +228,7 @@ pub fn timeline_line(ev: &Event) -> String {
     )
 }
 
-fn is_noise(ev: &Event) -> bool {
+pub fn is_noise(ev: &Event) -> bool {
     matches!(
         ev.action.as_str(),
         "file.runtime_read"

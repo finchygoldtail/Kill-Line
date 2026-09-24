@@ -89,6 +89,18 @@ fn system_metadata(session: &Session, head: &str) -> serde_json::Value {
     })
 }
 
+/// The dashboard asks the monitor to act by dropping `control.json` into the
+/// session directory (root-only, 0700). The monitor owns the sensor and the
+/// tracked PIDs, so it is the one that executes the action.
+fn take_control_request(dir: &std::path::Path) -> Option<String> {
+    let p = dir.join("control.json");
+    let text = std::fs::read_to_string(&p).ok()?;
+    let _ = std::fs::remove_file(&p);
+    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let a = v.get("action")?.as_str()?;
+    matches!(a, "freeze" | "resume" | "terminate" | "stop").then(|| a.to_string())
+}
+
 pub fn run(opts: Options) -> Result<i32> {
     let policy_text = std::fs::read_to_string(&opts.policy)
         .with_context(|| format!("reading {}", opts.policy.display()))?;
@@ -315,6 +327,9 @@ pub fn run(opts: Options) -> Result<i32> {
                 ResponseAction::Terminate => respond::terminate(&handle, &pids),
                 ResponseAction::Alert => unreachable!(),
             };
+            if result.is_ok() && response == ResponseAction::Freeze {
+                session.frozen = true;
+            }
             let (sev, msg) = match result {
                 Ok(m) => (Severity::Info, format!("Response executed: {}.", m)),
                 Err(e) => (
@@ -374,6 +389,38 @@ pub fn run(opts: Options) -> Result<i32> {
         sensor.poll(100, 4096, &mut obs)?;
         for o in obs.drain(..) {
             out_events.extend(engine.process(o));
+        }
+
+        // Operator requests from the dashboard (`killline ui`).
+        if let Some(action) = take_control_request(&store.dir) {
+            let pids = || sensor.tracked_pids().unwrap_or_default();
+            let result = match action.as_str() {
+                "freeze" => respond::freeze(&handle, &pids).inspect(|_| session.frozen = true),
+                "resume" => respond::resume(&handle, &pids).inspect(|_| session.frozen = false),
+                "terminate" => respond::terminate(&handle, &pids),
+                "stop" => {
+                    exit_reason = "stopped from the dashboard".into();
+                    STOP.store(true, Ordering::SeqCst);
+                    Ok("monitoring will stop".into())
+                }
+                other => Err(anyhow::anyhow!("unknown action '{}'", other)),
+            };
+            let (sev, msg) = match result {
+                Ok(m) => (
+                    Severity::Info,
+                    format!("Operator action from dashboard: {} ({}).", action, m),
+                ),
+                Err(e) => (
+                    Severity::High,
+                    format!("Operator action '{}' FAILED: {:#}.", action, e),
+                ),
+            };
+            if action != "stop" {
+                session.response_taken.push(msg.clone());
+            }
+            out_events.push(engine.notice(Category::Response, "response.operator", sev, msg));
+            store.save_session(&session)?;
+            continue;
         }
 
         if last_tick.elapsed() >= Duration::from_secs(1) {

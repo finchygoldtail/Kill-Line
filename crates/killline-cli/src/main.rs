@@ -2,6 +2,7 @@
 
 mod launch;
 mod monitor;
+mod ui;
 mod views;
 
 use anyhow::{bail, Result};
@@ -79,6 +80,15 @@ enum Cmd {
         verbose: u8,
         #[arg(required = true, last = true)]
         command: Vec<String>,
+    },
+    /// Open the local dashboard (127.0.0.1 only; token-protected)
+    Ui {
+        /// Port on 127.0.0.1 (0 picks a free one)
+        #[arg(long, default_value_t = 7727)]
+        port: u16,
+        /// Open the dashboard in the default browser
+        #[arg(long)]
+        open: bool,
     },
     /// Show the status panel of a session (default: most recent)
     Status {
@@ -202,6 +212,7 @@ fn run(cli: Cli, root: PathBuf) -> Result<i32> {
                 duration: None,
             })
         }
+        Cmd::Ui { port, open } => ui::serve(root, port, open),
         Cmd::Status { session, watch } => views::status(&root, session.as_deref(), watch),
         Cmd::Sessions => views::sessions(&root),
         Cmd::Incidents => views::incidents(&root),

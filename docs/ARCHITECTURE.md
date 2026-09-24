@@ -35,7 +35,7 @@ KillLine V1 is one binary, `killline`, built from three crates. It needs no daem
 |---|---|---|
 | `killline-core` | Policy format and validation, `Observation` → `Event` evaluation, anomaly heuristics, correlation, session state, hash-chained store, incident bundles, redaction | **No.** Pure Rust; unit and scenario tests run anywhere |
 | `killline-sensor` | eBPF program (built by `build.rs` from `bpf/`), loading and attach, coverage reporting, decoding, target resolution (Docker/PID), response actions | Yes |
-| `killline-cli` | The `killline` command: monitoring loop, terminal UI, read-only views | Via the sensor |
+| `killline-cli` | The `killline` command: monitoring loop, terminal UI, read-only views, and the local dashboard (`killline ui`: `ui.rs` + embedded `ui/` assets) | Via the sensor |
 
 The split keeps the security-critical decision logic small, dependency-light and testable without root. It also lets a different sensor (Tetragon, Falco, fanotify, a future Kubernetes DaemonSet) feed the same engine.
 

@@ -114,6 +114,9 @@ pub struct Session {
     pub response_mode: String,
     #[serde(default)]
     pub response_taken: Vec<String>,
+    /// The agent is currently frozen by KillLine.
+    #[serde(default)]
+    pub frozen: bool,
     pub monitor_pid: u32,
     pub heartbeat: DateTime<Utc>,
     #[serde(skip)]
@@ -154,6 +157,7 @@ impl Session {
             incidents: vec![],
             response_mode: response_mode.into(),
             response_taken: vec![],
+            frozen: false,
             monitor_pid: std::process::id(),
             heartbeat: now,
             process_table: BTreeMap::new(),

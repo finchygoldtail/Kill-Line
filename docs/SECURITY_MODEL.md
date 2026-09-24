@@ -19,6 +19,17 @@ KillLine runs as root and parses data produced by a potentially hostile agent: p
 | **Honest status** | Critical coverage gaps and drops always surface. Wording never claims safety; this is enforced by a test (`never_claims_safety`) |
 | **Fail-closed option** | `response.on_degraded: freeze\|terminate` |
 
+## The local dashboard (`killline ui`)
+
+- Listens on **127.0.0.1 only**. There is no option to bind elsewhere.
+- **Access token:** a random 128-bit token is generated per run and printed in the link (`#token`, a URL fragment, so it is never sent in requests or logs). The page sends it in an `X-KillLine-Token` header. Every API call without it gets 401. The custom header also forces a CORS preflight, which the server never approves, so other websites open in the same browser cannot read data or trigger actions.
+- **DNS-rebinding defence:** requests whose `Host` header is not `127.0.0.1:<port>`, `localhost:<port>` or `[::1]:<port>` are rejected.
+- **Strict CSP:** `default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'`, plus `nosniff`, `no-referrer`, `no-store` and `X-Frame-Options: DENY`. All assets are embedded in the binary, with no CDN.
+- **Rendering:** agent-controlled strings are inserted as text nodes only, never as HTML.
+- **Requests:** POST bodies must be JSON and at most 16 KiB. IDs are validated before any filesystem use.
+- **Operator actions** (freeze/resume/terminate/stop) are passed to the running monitor through a `control.json` file in the root-only session directory. The monitor, which owns the sensor and the tracked PIDs, executes the action and records it in the timeline.
+- **Monitors started from the dashboard** run detached, so they keep running if the dashboard is closed.
+
 ## Privileges KillLine needs
 
 Root, or at minimum:

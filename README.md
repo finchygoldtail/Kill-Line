@@ -61,9 +61,20 @@ sudo ./target/release/killline monitor --container my-agent --policy policies/no
 sudo ./target/release/killline run --policy policy.yaml --user 1000 -- python3 agent.py
 ```
 
-Then, in another terminal:
+### Dashboard
 
 ```sh
+sudo killline ui --open        # local dashboard at http://127.0.0.1:7727/#<token>
+```
+
+A dark, offline dashboard served by the same binary. It shows every session's status (GREEN / AMBER / RED / GREY) and live stats. It has a live timeline with read bursts collapsed, every breach with whether it was **crossed** or **held**, incident drawers with the pre-breach timeline, process tree and checksum verification, and sensor coverage. From the dashboard you can start monitoring a container or process with a policy template, and **freeze, resume, terminate or stop** a monitored agent. It listens on 127.0.0.1 only and requires the access token in the printed link. It loads nothing from the internet.
+
+### CLI
+
+In another terminal:
+
+```sh
+sudo killline ui [--open]          # the local dashboard
 sudo killline status [--watch]     # the status panel (GREEN / AMBER / RED / GREY)
 sudo killline sessions             # all monitoring sessions
 sudo killline incidents            # all incidents

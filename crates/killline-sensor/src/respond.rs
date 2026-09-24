@@ -70,6 +70,20 @@ pub fn terminate(h: &Handle, pids: &dyn Fn() -> Vec<u32>) -> Result<String> {
     }
 }
 
+/// Undo a freeze: `docker unpause`, or SIGCONT to the tracked processes.
+pub fn resume(h: &Handle, pids: &dyn Fn() -> Vec<u32>) -> Result<String> {
+    match h {
+        Handle::Container(id) => {
+            docker(&["unpause", id])?;
+            Ok(format!("container {} unpaused", short(id)))
+        }
+        Handle::Pids => {
+            let n = signal_all(&pids(), libc::SIGCONT);
+            Ok(format!("sent SIGCONT to {} process(es)", n))
+        }
+    }
+}
+
 fn short(id: &str) -> &str {
     &id[..id.len().min(12)]
 }
