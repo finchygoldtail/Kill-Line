@@ -67,6 +67,8 @@ sudo ./target/release/killline run --policy policy.yaml --user 1000 -- python3 a
 sudo killline ui --open        # local dashboard at http://127.0.0.1:7727/#<token>
 ```
 
+![KillLine dashboard showing a RED boundary breach](docs/demo/dashboard-red.png)
+
 A dark, offline dashboard served by the same binary. It shows every session's status (GREEN / AMBER / RED / GREY) and live stats. It has a live timeline with read bursts collapsed, every breach with whether it was **crossed** or **held**, incident drawers with the pre-breach timeline, process tree and checksum verification, and sensor coverage. From the dashboard you can start monitoring a container or process with a policy template, and **freeze, resume, terminate or stop** a monitored agent. It listens on 127.0.0.1 only and requires the access token in the printed link. It loads nothing from the internet.
 
 ### CLI
