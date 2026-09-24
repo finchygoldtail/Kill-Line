@@ -15,7 +15,12 @@ fn main() {
         .unwrap_or(200_000);
     let p = Policy::parse("agent: bench\nfilesystem: {allow: [/work]}\nnetwork: {mode: deny}\n")
         .unwrap();
-    let mut engine = Engine::new(p.compile().unwrap(), "bench", None);
+    let mut engine = Engine::new(
+        p.compile_for(killline_core::policy::Platform::Linux)
+            .unwrap(),
+        "bench",
+        None,
+    );
     let mut session = Session::new("bench", "bench", "p", "t", "alert");
     let root = std::env::temp_dir().join(format!("kl-bench-{}", std::process::id()));
     let mut store = SessionStore::create(&root, "s", "agent: bench\n").unwrap();

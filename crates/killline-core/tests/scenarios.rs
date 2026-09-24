@@ -38,7 +38,9 @@ struct Harness {
 impl Harness {
     fn new(policy: &str) -> Harness {
         let p = Policy::parse(policy).unwrap();
-        let c = p.compile().unwrap();
+        let c = p
+            .compile_for(killline_core::policy::Platform::Linux)
+            .unwrap();
         Harness {
             engine: Engine::new(c, "s1", Some(4242)),
             session: Session::new("s1", &p.agent, "p", "test", "alert"),
