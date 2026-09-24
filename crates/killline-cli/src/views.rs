@@ -515,12 +515,13 @@ pub fn inspect(root: &Path, id: &str, raw: bool) -> Result<i32> {
     say!(
         "{}",
         paint(
-            " Timeline (most recent 25 notable events before the breach)",
+            " Timeline (most recent notable events before the breach; similar reads collapsed)",
             BOLD
         )
     );
-    for e in before.iter().rev().take(25).rev() {
-        say!("   {}", timeline_line(e));
+    let groups = collapse(&before);
+    for g in groups.iter().rev().take(25).rev() {
+        say!("   {}", g);
     }
     say!(
         "   {}",
@@ -556,6 +557,57 @@ pub fn inspect(root: &Path, id: &str, raw: bool) -> Result<i32> {
         say!(" {}", paint(&format!("Note: {}", n), DIM));
     }
     Ok(0)
+}
+
+/// Collapse runs of allowed file accesses by the same process in the same
+/// directory into one line, so a burst of reads cannot push the context that
+/// matters (e.g. the untrusted document read) out of view.
+fn collapse(events: &[&Event]) -> Vec<String> {
+    let dir_of = |e: &Event| -> Option<(u32, String)> {
+        match (&e.observation, e.verdict) {
+            (Some(ObsKind::Open { path, .. }), Verdict::Allowed) => {
+                let d = path.rsplit_once('/').map(|(d, _)| d.to_string())?;
+                Some((e.process.as_ref().map(|p| p.pid).unwrap_or(0), d))
+            }
+            _ => None,
+        }
+    };
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < events.len() {
+        let key = dir_of(events[i]);
+        let mut j = i + 1;
+        if key.is_some() {
+            while j < events.len() && dir_of(events[j]) == key {
+                j += 1;
+            }
+        }
+        let n = j - i;
+        if n >= 4 {
+            let (_, dir) = key.unwrap();
+            out.push(format!(
+                "{} {} {:<22} {}",
+                paint(&time(events[i]), DIM),
+                marker(events[i]),
+                proc_tag(events[i]),
+                paint(
+                    &format!(
+                        "… {} file accesses under {}/ (until {})",
+                        n,
+                        clean(&dir),
+                        time(events[j - 1])
+                    ),
+                    DIM
+                )
+            ));
+        } else {
+            for e in &events[i..j] {
+                out.push(timeline_line(e));
+            }
+        }
+        i = j;
+    }
+    out
 }
 
 fn read_timeline_file(p: &Path) -> Result<Vec<Event>> {

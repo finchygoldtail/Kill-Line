@@ -112,6 +112,10 @@ See [POLICY_FORMAT.md](docs/POLICY_FORMAT.md). Templates: `offline-research`, `c
 
 What it **cannot** see is equally important: [THREAT_MODEL.md](docs/THREAT_MODEL.md) and [LIMITATIONS.md](docs/LIMITATIONS.md).
 
+## Demo recording
+
+[`docs/demo/killline-demo.cast`](docs/demo/killline-demo.cast) is a 64-second asciinema recording of the demos (`asciinema play docs/demo/killline-demo.cast`). Re-record it with `asciinema rec -c test-lab/narrated-demo.sh`.
+
 ## Try it safely
 
 [`test-lab/`](test-lab) is a Docker Compose lab: an agent container on an internal-only network, a fake metadata service, a fake internal service, a dummy sink and fake secrets. [`test-agent/`](test-agent) is a deliberately harmless agent with modes `normal`, `network`, `dns`, `sensitive-file`, `spawn`, `metadata`, `docker-socket`, `symlink` and `behaviour-shift`.
