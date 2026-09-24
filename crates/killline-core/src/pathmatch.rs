@@ -39,6 +39,67 @@ pub fn resolve(base: &str, path: &str) -> String {
     }
 }
 
+/// Canonical form of a Windows path, so the same matcher serves both
+/// platforms: lowercase (NTFS lookups are case-insensitive), forward
+/// slashes, a leading slash before the drive, device and pipe namespaces
+/// shortened.
+///
+/// `C:\Users\Bob\.ssh\id_rsa`      → `/c:/users/bob/.ssh/id_rsa`
+/// `\??\C:\Temp\x`                → `/c:/temp/x`
+/// `\Device\NamedPipe\docker_engine` → `/pipe/docker_engine`
+/// `\\.\PhysicalDrive0`            → `/physicaldrive0`
+pub fn canonical_windows(path: &str) -> String {
+    let mut p = path.replace('\\', "/").to_lowercase();
+    for prefix in ["//?/", "/??/", "//./"] {
+        if let Some(rest) = p.strip_prefix(prefix) {
+            p = rest.to_string();
+            break;
+        }
+    }
+    if let Some(rest) = p.strip_prefix("/device/namedpipe/") {
+        p = format!("/pipe/{}", rest);
+    } else if let Some(rest) = p.strip_prefix("pipe/") {
+        p = format!("/pipe/{}", rest);
+    }
+    let b = p.as_bytes();
+    if b.len() >= 2 && b[1] == b':' && b[0].is_ascii_alphabetic() {
+        p = format!("/{}", p);
+    }
+    normalize(&p)
+}
+
+/// Is this pattern an absolute Windows path (`C:\…`, `C:/…`) or UNC path?
+pub fn is_windows_absolute(p: &str) -> bool {
+    let b = p.as_bytes();
+    (b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/'))
+        || p.starts_with("\\\\")
+        || (b.len() >= 3
+            && (b[0] == b'*' || b[0] == b'?')
+            && b[1] == b':'
+            && (b[2] == b'\\' || b[2] == b'/'))
+}
+
+/// Home expansion for Windows: `~/x` → `/*:/users/*/x` (any drive, any user).
+pub fn expand_home_windows(pattern: &str) -> Vec<String> {
+    let p = pattern.replace('\\', "/");
+    if let Some(rest) = p.strip_prefix("~/") {
+        vec![canonical_windows_pattern(&format!("*:/users/*/{}", rest))]
+    } else if p == "~" {
+        vec!["/*:/users/*".to_string()]
+    } else {
+        vec![canonical_windows_pattern(&p)]
+    }
+}
+
+/// Like `canonical_windows`, for patterns (keeps `**/` prefixes and globs).
+pub fn canonical_windows_pattern(p: &str) -> String {
+    let p = p.replace('\\', "/").to_lowercase();
+    if p.starts_with("**/") || p.starts_with('/') {
+        return p;
+    }
+    canonical_windows(&p)
+}
+
 /// Expand `~/x` into `/root/x` and `/home/*/x`.
 pub fn expand_home(pattern: &str) -> Vec<String> {
     if let Some(rest) = pattern.strip_prefix("~/") {
@@ -184,6 +245,18 @@ impl PatternSet {
     pub fn matches(&self, path: &str) -> bool {
         self.first_match(path).is_some()
     }
+
+    /// Is `path` a proper ancestor of one of the plain (non-glob) patterns?
+    pub fn is_ancestor(&self, path: &str) -> bool {
+        let with_slash = if path.ends_with('/') {
+            path.to_string()
+        } else {
+            format!("{}/", path)
+        };
+        self.prefixes
+            .iter()
+            .any(|(pre, _)| pre.len() > path.len() && pre.starts_with(&with_slash))
+    }
 }
 
 #[cfg(test)]
@@ -227,6 +300,35 @@ mod tests {
         }
         let set = PatternSet::new(["/a", "/b"].iter());
         assert_eq!(set.first_match("/c"), None);
+    }
+
+    #[test]
+    fn windows_paths() {
+        assert_eq!(
+            canonical_windows(r"C:\Users\Bob\.ssh\id_rsa"),
+            "/c:/users/bob/.ssh/id_rsa"
+        );
+        assert_eq!(canonical_windows(r"\??\C:\Temp\..\x"), "/c:/x");
+        assert_eq!(
+            canonical_windows(r"\Device\NamedPipe\docker_engine"),
+            "/pipe/docker_engine"
+        );
+        assert_eq!(
+            canonical_windows(r"\\.\pipe\docker_engine"),
+            "/pipe/docker_engine"
+        );
+        assert_eq!(canonical_windows(r"\\.\PhysicalDrive0"), "/physicaldrive0");
+        assert!(is_windows_absolute(r"C:\Work"));
+        assert!(!is_windows_absolute("relative"));
+        let pats = expand_home_windows("~/.aws");
+        assert!(matches(
+            &pats[0],
+            &canonical_windows(r"D:\Users\Alice\.aws\credentials")
+        ));
+        assert_eq!(
+            canonical_windows_pattern(r"C:\Work\Project"),
+            "/c:/work/project"
+        );
     }
 
     #[test]

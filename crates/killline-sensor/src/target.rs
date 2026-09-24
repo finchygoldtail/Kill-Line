@@ -1,7 +1,10 @@
 //! Resolve what "the agent" is: a container, a PID tree, or a command we
 //! launch ourselves.
 
-use anyhow::{bail, Context, Result};
+#[cfg(target_os = "linux")]
+use anyhow::Context;
+use anyhow::{bail, Result};
+#[cfg(target_os = "linux")]
 use std::process::Command;
 
 #[derive(Debug, Clone)]
@@ -12,6 +15,7 @@ pub struct ContainerInfo {
     pub pidns: u32,
 }
 
+#[cfg(target_os = "linux")]
 /// Namespace inode of /proc/<pid>/ns/<kind>, e.g. "pid:[4026532201]".
 pub fn ns_inode(pid: u32, kind: &str) -> Result<u32> {
     let link = std::fs::read_link(format!("/proc/{}/ns/{}", pid, kind))
@@ -25,6 +29,7 @@ pub fn ns_inode(pid: u32, kind: &str) -> Result<u32> {
     Ok(inner.parse()?)
 }
 
+#[cfg(target_os = "linux")]
 fn valid_container_ref(s: &str) -> bool {
     !s.is_empty()
         && s.len() <= 128
@@ -32,6 +37,7 @@ fn valid_container_ref(s: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
 }
 
+#[cfg(target_os = "linux")]
 /// Look a container up through the Docker CLI. Kill Line only reads
 /// (`docker inspect`); it never changes container configuration.
 pub fn docker_container(name: &str) -> Result<ContainerInfo> {
@@ -77,6 +83,7 @@ pub fn docker_container(name: &str) -> Result<ContainerInfo> {
     })
 }
 
+#[cfg(target_os = "linux")]
 /// All current processes in a PID namespace (to seed tracking).
 pub fn pids_in_ns(pidns: u32) -> Vec<u32> {
     let mut out = Vec::new();
@@ -92,6 +99,7 @@ pub fn pids_in_ns(pidns: u32) -> Vec<u32> {
     out
 }
 
+#[cfg(target_os = "linux")]
 /// A PID and all its current descendants.
 pub fn pid_tree(root: u32) -> Vec<u32> {
     let mut parent_of = Vec::new();
@@ -119,6 +127,83 @@ pub fn pid_tree(root: u32) -> Vec<u32> {
         let p = out[i];
         for (c, pp) in &parent_of {
             if *pp == p && !out.contains(c) {
+                out.push(*c);
+            }
+        }
+        i += 1;
+    }
+    out
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn docker_container(_name: &str) -> Result<ContainerInfo> {
+    bail!("container monitoring is Linux-only in this version; monitor a process with --pid or `killline run` instead")
+}
+
+/// Does a process with this PID exist?
+pub fn pid_exists(pid: u32) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        std::path::Path::new(&format!("/proc/{}", pid)).exists()
+    }
+    #[cfg(windows)]
+    {
+        snapshot().iter().any(|(p, _, _)| *p == pid)
+    }
+    #[cfg(not(any(target_os = "linux", windows)))]
+    {
+        let _ = pid;
+        false
+    }
+}
+
+/// (pid, parent pid, exe name) of every process, from a Toolhelp snapshot.
+#[cfg(windows)]
+pub fn snapshot() -> Vec<(u32, u32, String)> {
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+    let mut out = Vec::new();
+    // SAFETY: standard Toolhelp iteration; the snapshot handle is closed.
+    unsafe {
+        let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snap == INVALID_HANDLE_VALUE {
+            return out;
+        }
+        let mut e: PROCESSENTRY32W = std::mem::zeroed();
+        e.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        let mut ok = Process32FirstW(snap, &mut e);
+        while ok != 0 {
+            let len = e
+                .szExeFile
+                .iter()
+                .position(|&c| c == 0)
+                .unwrap_or(e.szExeFile.len());
+            out.push((
+                e.th32ProcessID,
+                e.th32ParentProcessID,
+                String::from_utf16_lossy(&e.szExeFile[..len]),
+            ));
+            ok = Process32NextW(snap, &mut e);
+        }
+        CloseHandle(snap);
+    }
+    out
+}
+
+/// A PID and all its current descendants.
+#[cfg(windows)]
+pub fn pid_tree(root: u32) -> Vec<u32> {
+    let procs = snapshot();
+    let mut out = vec![root];
+    let mut i = 0;
+    while i < out.len() {
+        let p = out[i];
+        for (c, pp, _) in &procs {
+            // PID 0/4 are the idle and System processes; never descend from them.
+            if *pp == p && *c > 4 && !out.contains(c) {
                 out.push(*c);
             }
         }

@@ -15,7 +15,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
 use killline_core::event::{Event, Verdict};
 use killline_core::incident;
-use killline_core::policy::{Level, Policy, TEMPLATES};
+use killline_core::policy::{templates_for, Level, Platform, Policy};
 use killline_core::store::{self, find_session, list_sessions, read_timeline, verify_timeline};
 use serde_json::{json, Value};
 use std::io::Read;
@@ -83,11 +83,7 @@ pub fn serve(
         });
     }
     if open {
-        let _ = std::process::Command::new("xdg-open")
-            .arg(&url)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn();
+        crate::platform::open_url(&url);
     }
     for req in server.incoming_requests() {
         handle(&ctx, req);
@@ -265,7 +261,7 @@ fn route(ctx: &Ctx, method: Method, path: &str, query: &str, body: Option<Value>
         (Method::Get, ["incidents"]) => Ok(serde_json::to_value(incident::list_incidents(&ctx.root)?)?),
         (Method::Get, ["incidents", id]) => incident_detail(ctx, valid_id(id)?),
         (Method::Get, ["containers"]) => containers(),
-        (Method::Get, ["templates"]) => Ok(json!(TEMPLATES
+        (Method::Get, ["templates"]) => Ok(json!(templates_for(Platform::current())
             .iter()
             .map(|(n, t)| json!({"name": n, "description": Policy::parse(t).ok().and_then(|p| p.description), "text": t}))
             .collect::<Vec<_>>())),
@@ -276,6 +272,7 @@ fn route(ctx: &Ctx, method: Method, path: &str, query: &str, body: Option<Value>
 }
 
 fn overview(ctx: &Ctx) -> Result<Value> {
+    let host = crate::platform::host_info();
     let docker = std::process::Command::new("docker")
         .args(["version", "--format", "{{.Server.Version}}"])
         .output()
@@ -285,9 +282,11 @@ fn overview(ctx: &Ctx) -> Result<Value> {
     Ok(json!({
         "version": killline_core::VERSION,
         "data_dir": ctx.root.display().to_string(),
-        "kernel": std::fs::read_to_string("/proc/sys/kernel/osrelease").unwrap_or_default().trim(),
-        "hostname": std::fs::read_to_string("/proc/sys/kernel/hostname").unwrap_or_default().trim(),
-        "ebpf_built": killline_sensor::Sensor::built_with_bpf(),
+        "kernel": host.kernel,
+        "hostname": host.hostname,
+        "platform": std::env::consts::OS,
+        "sensor": killline_sensor::sensor_name(),
+        "ebpf_built": killline_sensor::Sensor::available(),
         "btf": Path::new("/sys/kernel/btf/vmlinux").exists(),
         "docker": docker,
         "now": Utc::now(),
@@ -449,8 +448,8 @@ fn containers() -> Result<Value> {
 
 fn policy_from_body(body: &Value) -> Result<(String, String)> {
     if let Some(t) = body.get("template").and_then(|t| t.as_str()) {
-        let (_, text) = TEMPLATES
-            .iter()
+        let (_, text) = templates_for(Platform::current())
+            .into_iter()
             .find(|(n, _)| *n == t)
             .ok_or_else(|| anyhow!("no template '{}'", t))?;
         return Ok((text.to_string(), format!("template:{}", t)));
@@ -496,7 +495,7 @@ fn start_monitor(ctx: &Ctx, body: Value) -> Result<Value> {
         args.extend(["--container".into(), c.to_string()]);
         label = format!("container {}", c);
     } else if let Some(p) = body.get("pid").and_then(|p| p.as_u64()) {
-        if !Path::new(&format!("/proc/{}", p)).exists() {
+        if !killline_sensor::target::pid_exists(p as u32) {
             bail!("no process with pid {}", p);
         }
         args.extend(["--pid".into(), p.to_string()]);
@@ -530,13 +529,7 @@ fn start_monitor(ctx: &Ctx, body: Value) -> Result<Value> {
         .stdout(log.try_clone()?)
         .stderr(log);
     // Detach into its own session so it outlives the dashboard.
-    use std::os::unix::process::CommandExt;
-    unsafe {
-        cmd.pre_exec(|| {
-            libc::setsid();
-            Ok(())
-        });
-    }
+    crate::platform::detach(&mut cmd);
     let mut child = cmd.spawn().context("starting killline monitor")?;
     for _ in 0..50 {
         std::thread::sleep(std::time::Duration::from_millis(100));

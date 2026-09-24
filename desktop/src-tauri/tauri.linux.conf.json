@@ -1,0 +1,18 @@
+{
+  "bundle": {
+    "targets": [
+      "deb",
+      "appimage"
+    ],
+    "linux": {
+      "deb": {
+        "depends": [
+          "pkexec | policykit-1"
+        ],
+        "files": {
+          "/usr/share/polkit-1/actions/org.killline.dashboard.policy": "polkit/org.killline.dashboard.policy"
+        }
+      }
+    }
+  }
+}

@@ -12,13 +12,6 @@ use chrono::{DateTime, Duration, Utc};
 use std::collections::{HashMap, VecDeque};
 use std::net::IpAddr;
 
-/// Executables that exist to change privilege or escape confinement.
-const PRIVILEGE_TOOLS: &[&str] = &[
-    "sudo", "su", "doas", "pkexec", "runuser", "setpriv", "nsenter", "unshare", "capsh", "chroot",
-    "mount", "umount", "insmod", "modprobe", "newgrp", "sg", "docker", "podman", "nerdctl", "ctr",
-    "crictl", "kubectl",
-];
-
 const CLONE_NEWNS: u64 = 0x0002_0000;
 const CLONE_NEWCGROUP: u64 = 0x0200_0000;
 const CLONE_NEWUTS: u64 = 0x0400_0000;
@@ -646,8 +639,25 @@ impl Engine {
 
     fn decide_exec(&self, path: &str, exists: bool) -> Decision {
         let proc = &self.policy.source.processes;
-        let base = path.rsplit('/').next().unwrap_or(path);
+        let win = self.policy.platform == Platform::Windows;
+        let base_raw = path.rsplit('/').next().unwrap_or(path);
+        // On Windows names are case-insensitive and `python` means `python.exe`.
+        let base_owned = if win {
+            let b = base_raw.to_ascii_lowercase();
+            b.strip_suffix(".exe").map(str::to_string).unwrap_or(b)
+        } else {
+            base_raw.to_string()
+        };
+        let base = base_owned.as_str();
         let name_match = |e: &String| {
+            if win {
+                if e.contains('\\') || e.contains('/') {
+                    return pathmatch::canonical_windows(e) == path;
+                }
+                let e = e.to_ascii_lowercase();
+                let e = e.strip_suffix(".exe").unwrap_or(&e);
+                return pathmatch::matches(&format!("/{}", e), &format!("/{}", base));
+            }
             if e.contains('/') {
                 pathmatch::normalize(e) == pathmatch::normalize(path)
             } else {
@@ -667,7 +677,7 @@ impl Engine {
                 ),
             );
         }
-        if proc.deny_privileged && PRIVILEGE_TOOLS.contains(&base) {
+        if proc.deny_privileged && self.policy.privilege_tools.contains(&base) {
             return Decision::violation(
                 Category::Privilege,
                 "process.exec_privileged",
@@ -761,7 +771,8 @@ impl Engine {
             let skip =
                 pat.starts_with("/proc/*/") && !(proc_ok && Self::is_other_proc(path, p.pid));
             if !skip {
-                let what = ESCAPE_INDICATORS
+                let what = pol
+                    .escape_info
                     .iter()
                     .find(|(p, _)| *p == pat)
                     .map(|(_, w)| *w)
@@ -842,6 +853,17 @@ impl Engine {
                 "filesystem.allow_write",
                 format!("Writes only under: {}", list_or_none(&pol.source.filesystem.allow_write, &pol.source.filesystem.allow)),
                 format!("The agent tried to write to {}{}, which is outside the paths this policy allows it to modify.", path, how),
+            );
+        }
+
+        // Windows opens every parent folder of a path to check attributes,
+        // and ETW does not say whether an open reads content. Opening a
+        // parent of an allowed location is navigation, not a read.
+        if pol.platform == Platform::Windows && pol.read_allow.is_ancestor(path) {
+            return Decision::allowed(
+                Category::Filesystem,
+                "file.traverse",
+                format!("Opened folder {} on the way to an allowed location.", path),
             );
         }
 

@@ -18,6 +18,11 @@ fn main() {
     );
     println!("cargo:rerun-if-env-changed=KILLLINE_CLANG");
     println!("cargo:rustc-check-cfg=cfg(killline_no_bpf)");
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("linux") {
+        // eBPF is Linux-only; other platforms use their own sensor.
+        std::fs::write(&out, b"").unwrap();
+        return;
+    }
 
     let clang = env::var("KILLLINE_CLANG").unwrap_or_else(|_| "clang".into());
     let arch = match env::var("CARGO_CFG_TARGET_ARCH").as_deref() {

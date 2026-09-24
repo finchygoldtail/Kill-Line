@@ -13,8 +13,10 @@ It never exploits anything, never reads real secrets and never sends data:
     expected to fail inside the lab;
   * spawned processes are trivial (`sh -c true`, `id`).
 
-Modes: normal, network, dns, sensitive-file, spawn, metadata, docker-socket,
-       behaviour-shift, symlink, all
+Modes: normal, network, local-connect, dns, sensitive-file, spawn, metadata,
+       docker-socket, behaviour-shift, symlink, all
+
+Works on Linux and Windows (Windows uses cmd/whoami and the Docker named pipe).
 """
 import os
 import socket
@@ -24,6 +26,9 @@ import time
 
 WORKSPACE = os.environ.get("KL_WORKSPACE", "/workspace")
 FAKE_SECRET = os.environ.get("KL_FAKE_SECRET", "/fake-secrets/api-key.txt")
+# A local, harmless listener (e.g. started by the smoke test) for a TCP
+# connection that completes without leaving the machine.
+LOCAL_PORT = int(os.environ.get("KL_LOCAL_PORT", "0"))
 SINK_HOST = os.environ.get("KL_SINK_HOST", "203.0.113.42")  # TEST-NET-3
 SINK_PORT = int(os.environ.get("KL_SINK_PORT", "443"))
 PAUSE = float(os.environ.get("KL_PAUSE", "0.5"))
@@ -87,6 +92,19 @@ def network():
         s.close()
 
 
+def local_connect():
+    """A completed TCP connection to a listener on this machine."""
+    if not LOCAL_PORT:
+        log("KL_LOCAL_PORT not set; skipping")
+        return
+    log(f"connecting to local listener 127.0.0.1:{LOCAL_PORT}")
+    try:
+        with socket.create_connection(("127.0.0.1", LOCAL_PORT), timeout=2):
+            log("connected (no data sent)")
+    except OSError as e:
+        log(f"failed: {e}")
+
+
 def dns():
     log(f"attempting DNS lookup of {DNS_NAME}")
     try:
@@ -109,6 +127,11 @@ def sensitive_file():
 
 
 def spawn():
+    if os.name == "nt":
+        log("spawning unexpected child processes: cmd /c exit 0; whoami")
+        subprocess.run(["cmd", "/c", "exit", "0"], check=False)
+        subprocess.run(["whoami"], check=False, stdout=subprocess.DEVNULL)
+        return
     log("spawning unexpected child processes: sh -c true; id")
     subprocess.run(["sh", "-c", "true"], check=False)
     subprocess.run(["id"], check=False, stdout=subprocess.DEVNULL)
@@ -128,6 +151,15 @@ def metadata():
 
 
 def docker_socket():
+    if os.name == "nt":
+        pipe = r"\\.\pipe\docker_engine"
+        log(f"attempting to open the Docker named pipe {pipe} (expected to be absent)")
+        try:
+            with open(pipe, "rb"):
+                log("opened (nothing sent)")
+        except OSError as e:
+            log(f"failed as expected: {e}")
+        return
     log("attempting to connect to /var/run/docker.sock (expected to be absent)")
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
@@ -191,6 +223,7 @@ def behaviour_shift():
 MODES = {
     "normal": normal,
     "network": network,
+    "local-connect": local_connect,
     "dns": dns,
     "sensitive-file": sensitive_file,
     "spawn": spawn,

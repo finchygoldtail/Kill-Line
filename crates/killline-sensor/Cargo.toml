@@ -1,6 +1,6 @@
 [package]
 name = "killline-sensor"
-description = "Kill Line eBPF sensor: loads the kernel program and decodes its events"
+description = "Kill Line sensors: eBPF on Linux, ETW on Windows"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,8 +10,23 @@ build = "build.rs"
 [dependencies]
 killline-core = { path = "../killline-core" }
 anyhow.workspace = true
-libc.workspace = true
 chrono.workspace = true
 sha2.workspace = true
 hex.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
 aya = { version = "0.13", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+ferrisetw = "1.2"
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Diagnostics_Etw",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Threading",
+] }

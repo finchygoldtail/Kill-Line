@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, Write};
+#[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
@@ -30,6 +31,10 @@ pub const GENESIS: &str = "00000000000000000000000000000000000000000000000000000
 pub fn data_dir() -> PathBuf {
     if let Ok(d) = std::env::var("KILLLINE_HOME") {
         return PathBuf::from(d);
+    }
+    if cfg!(windows) {
+        let base = std::env::var("ProgramData").unwrap_or_else(|_| "C:\\ProgramData".into());
+        return PathBuf::from(base).join("KillLine");
     }
     let is_root = unsafe_geteuid() == 0;
     if is_root {
@@ -56,21 +61,32 @@ fn unsafe_geteuid() -> u32 {
 /// Create a directory readable only by its owner (forensic data can reveal
 /// paths and host details).
 pub fn private_dir(p: &Path) -> Result<()> {
-    fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(p)
+    #[allow(unused_mut)]
+    let mut b = fs::DirBuilder::new();
+    b.recursive(true);
+    // On Windows, %ProgramData%\KillLine inherits ProgramData's ACL (admins
+    // write, users read); tightening it is tracked in the roadmap.
+    #[cfg(unix)]
+    b.mode(0o700);
+    b.create(p)
         .with_context(|| format!("creating {}", p.display()))
+}
+
+#[cfg_attr(not(unix), allow(unused_mut))]
+fn private_open() -> OpenOptions {
+    let mut o = OpenOptions::new();
+    #[cfg(unix)]
+    o.mode(0o600);
+    o
 }
 
 pub fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
     let tmp = path.with_extension("tmp");
     {
-        let mut f = OpenOptions::new()
+        let mut f = private_open()
             .write(true)
             .create(true)
             .truncate(true)
-            .mode(0o600)
             .open(&tmp)?;
         f.write_all(bytes)?;
         f.sync_all().ok();
@@ -111,10 +127,9 @@ impl SessionStore {
         }
         private_dir(&dir)?;
         write_private(&dir.join("policy.yaml"), policy_text.as_bytes())?;
-        let timeline = OpenOptions::new()
+        let timeline = private_open()
             .append(true)
             .create_new(true)
-            .mode(0o600)
             .open(dir.join("timeline.jsonl"))?;
         Ok(SessionStore {
             dir,

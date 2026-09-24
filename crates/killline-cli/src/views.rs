@@ -240,6 +240,7 @@ pub fn is_noise(ev: &Event) -> bool {
             | "file.open_unresolved"
             | "runtime.setup"
             | "file.write_blocked_benign"
+            | "file.traverse"
     )
 }
 

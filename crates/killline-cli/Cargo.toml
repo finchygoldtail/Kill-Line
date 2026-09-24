@@ -17,6 +17,11 @@ anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
-libc.workspace = true
 tiny_http = { version = "0.12", default-features = false }
 clap = { version = "4.5", default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Console"] }

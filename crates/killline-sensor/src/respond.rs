@@ -27,23 +27,73 @@ fn docker(args: &[&str]) -> Result<()> {
     Ok(())
 }
 
-fn signal_all(pids: &[u32], sig: i32) -> usize {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ProcAction {
+    Suspend,
+    Resume,
+    Kill,
+}
+
+/// Apply an action to every tracked process; returns how many succeeded.
+fn act_all(pids: &[u32], action: ProcAction) -> usize {
     let me = std::process::id();
-    let mut n = 0;
-    for &p in pids {
-        if p <= 1 || p == me {
-            continue;
-        }
-        // SAFETY: plain kill(2).
-        if unsafe { libc::kill(p as i32, sig) } == 0 {
-            n += 1;
-        }
+    pids.iter()
+        .filter(|&&p| p > 4 && p != me)
+        .filter(|&&p| act_one(p, action))
+        .count()
+}
+
+#[cfg(unix)]
+fn act_one(pid: u32, action: ProcAction) -> bool {
+    let sig = match action {
+        ProcAction::Suspend => libc::SIGSTOP,
+        ProcAction::Resume => libc::SIGCONT,
+        ProcAction::Kill => libc::SIGKILL,
+    };
+    // SAFETY: plain kill(2).
+    unsafe { libc::kill(pid as i32, sig) == 0 }
+}
+
+#[cfg(windows)]
+fn act_one(pid: u32, action: ProcAction) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, TerminateProcess, PROCESS_SUSPEND_RESUME, PROCESS_TERMINATE,
+    };
+    #[link(name = "ntdll")]
+    extern "system" {
+        fn NtSuspendProcess(h: HANDLE) -> i32;
+        fn NtResumeProcess(h: HANDLE) -> i32;
     }
-    n
+    let access = if action == ProcAction::Kill {
+        PROCESS_TERMINATE
+    } else {
+        PROCESS_SUSPEND_RESUME
+    };
+    // SAFETY: handle is checked and closed; the ntdll calls take a process handle.
+    unsafe {
+        let h = OpenProcess(access, 0, pid);
+        if h.is_null() {
+            return false;
+        }
+        let ok = match action {
+            ProcAction::Suspend => NtSuspendProcess(h) >= 0,
+            ProcAction::Resume => NtResumeProcess(h) >= 0,
+            ProcAction::Kill => TerminateProcess(h, 1) != 0,
+        };
+        CloseHandle(h);
+        ok
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn act_one(_pid: u32, _action: ProcAction) -> bool {
+    false
 }
 
 /// Freeze the agent. Containers use the cgroup freezer via `docker pause`;
-/// process trees get SIGSTOP (twice, to catch children forked in between).
+/// process trees are suspended (SIGSTOP on Linux, NtSuspendProcess on
+/// Windows), twice to catch children created in between.
 pub fn freeze(h: &Handle, pids: &dyn Fn() -> Vec<u32>) -> Result<String> {
     match h {
         Handle::Container(id) => {
@@ -51,8 +101,8 @@ pub fn freeze(h: &Handle, pids: &dyn Fn() -> Vec<u32>) -> Result<String> {
             Ok(format!("container {} paused (cgroup freezer)", short(id)))
         }
         Handle::Pids => {
-            let n = signal_all(&pids(), libc::SIGSTOP) + signal_all(&pids(), libc::SIGSTOP);
-            Ok(format!("sent SIGSTOP to {} process(es)", n))
+            let n = act_all(&pids(), ProcAction::Suspend) + act_all(&pids(), ProcAction::Suspend);
+            Ok(format!("suspended {} process(es)", n))
         }
     }
 }
@@ -64,8 +114,8 @@ pub fn terminate(h: &Handle, pids: &dyn Fn() -> Vec<u32>) -> Result<String> {
             Ok(format!("container {} killed", short(id)))
         }
         Handle::Pids => {
-            let n = signal_all(&pids(), libc::SIGKILL) + signal_all(&pids(), libc::SIGKILL);
-            Ok(format!("sent SIGKILL to {} process(es)", n))
+            let n = act_all(&pids(), ProcAction::Kill) + act_all(&pids(), ProcAction::Kill);
+            Ok(format!("terminated {} process(es)", n))
         }
     }
 }
@@ -78,8 +128,8 @@ pub fn resume(h: &Handle, pids: &dyn Fn() -> Vec<u32>) -> Result<String> {
             Ok(format!("container {} unpaused", short(id)))
         }
         Handle::Pids => {
-            let n = signal_all(&pids(), libc::SIGCONT);
-            Ok(format!("sent SIGCONT to {} process(es)", n))
+            let n = act_all(&pids(), ProcAction::Resume);
+            Ok(format!("resumed {} process(es)", n))
         }
     }
 }

@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 static STOP: AtomicBool = AtomicBool::new(false);
 
-extern "C" fn on_signal(_: libc::c_int) {
+extern "C" fn on_signal(_: i32) {
     STOP.store(true, Ordering::SeqCst);
 }
 
@@ -43,6 +43,7 @@ pub struct Options {
 }
 
 const MAX_INCIDENTS_PER_SESSION: usize = 25;
+const QUIET_TICKS_BEFORE_EXIT: u32 = if cfg!(windows) { 3 } else { 1 };
 const CONTEXT_EVENTS: usize = 2000;
 
 fn session_id() -> String {
@@ -59,28 +60,15 @@ fn session_id() -> String {
 }
 
 fn system_metadata(session: &Session, head: &str) -> serde_json::Value {
-    let read = |p: &str| {
-        std::fs::read_to_string(p)
-            .map(|s| s.trim().to_string())
-            .unwrap_or_default()
-    };
-    let os = read("/etc/os-release")
-        .lines()
-        .find(|l| l.starts_with("PRETTY_NAME="))
-        .map(|l| {
-            l.trim_start_matches("PRETTY_NAME=")
-                .trim_matches('"')
-                .to_string()
-        })
-        .unwrap_or_default();
+    let host = crate::platform::host_info();
     serde_json::json!({
         "killline_version": killline_core::VERSION,
-        "kernel": read("/proc/sys/kernel/osrelease"),
-        "os": os,
-        "hostname": read("/proc/sys/kernel/hostname"),
-        "boot_id": read("/proc/sys/kernel/random/boot_id"),
+        "kernel": host.kernel,
+        "os": host.os,
+        "hostname": host.hostname,
+        "boot_id": host.boot_id,
         "monitor_pid": std::process::id(),
-        "sensor": "ebpf (tracepoints + fentry/security_file_open)",
+        "sensor": killline_sensor::sensor_name(),
         "coverage": session.coverage,
         "dropped_events": session.dropped_events,
         "degraded_reasons": session.degraded_reasons,
@@ -113,7 +101,10 @@ pub fn run(opts: Options) -> Result<i32> {
     let (scope, handle, target_label, liveness_pid) = match &opts.target {
         Target::Container(name) => {
             let c = target::docker_container(name)?;
+            #[cfg(target_os = "linux")]
             let pids = target::pids_in_ns(c.pidns);
+            #[cfg(not(target_os = "linux"))]
+            let pids: Vec<u32> = vec![];
             let label = format!("container:{} ({})", c.name, &c.id[..12]);
             (
                 Scope {
@@ -127,7 +118,7 @@ pub fn run(opts: Options) -> Result<i32> {
         }
         Target::Pid(pid) => {
             let pids = target::pid_tree(*pid);
-            if !std::path::Path::new(&format!("/proc/{}", pid)).exists() {
+            if !target::pid_exists(*pid) {
                 anyhow::bail!("no process {}", pid);
             }
             (
@@ -176,11 +167,7 @@ pub fn run(opts: Options) -> Result<i32> {
     session.coverage = sensor.coverage().to_vec();
     let mut engine = Engine::new(compiled, &sid, Some(std::process::id()));
 
-    // SAFETY: installing a handler that only stores to an atomic.
-    unsafe {
-        libc::signal(libc::SIGINT, on_signal as *const () as libc::sighandler_t);
-        libc::signal(libc::SIGTERM, on_signal as *const () as libc::sighandler_t);
-    }
+    crate::platform::install_stop_handler(on_signal);
 
     let mut out_events: Vec<Event> = Vec::new();
     for c in sensor.coverage().to_vec() {
@@ -260,6 +247,7 @@ pub fn run(opts: Options) -> Result<i32> {
     let mut obs = Vec::new();
     let mut last_status = session.status;
     let mut exit_reason = "stopped by user".to_string();
+    let mut quiet_ticks = 0u32;
     let mut reported: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     loop {
@@ -426,6 +414,17 @@ pub fn run(opts: Options) -> Result<i32> {
         if last_tick.elapsed() >= Duration::from_secs(1) {
             last_tick = Instant::now();
             session.heartbeat = Utc::now();
+            if let Some(reason) = sensor.health() {
+                if !session.degraded_reasons.contains(&reason) {
+                    out_events.push(engine.notice(
+                        Category::Monitor,
+                        "monitor.sensor_lost",
+                        Severity::High,
+                        reason.clone(),
+                    ));
+                }
+                session.degrade(reason);
+            }
             let drops = sensor.dropped().unwrap_or(0);
             if drops > last_drops {
                 let msg = format!(
@@ -465,18 +464,25 @@ pub fn run(opts: Options) -> Result<i32> {
             // Is the agent still there?
             let alive = match &mut launched {
                 Some(l) => l.child.try_wait().ok().flatten().is_none(),
-                None => std::path::Path::new(&format!("/proc/{}", liveness_pid)).exists(),
+                None => target::pid_exists(liveness_pid),
             };
             if !alive && pending.is_empty() {
-                // Drain what is left in the ring buffer before stopping.
+                // Drain what is left before stopping. ETW (Windows) delivers
+                // in buffers flushed about once a second, so wait for a few
+                // quiet seconds there; the eBPF ring buffer is immediate.
                 obs.clear();
                 sensor.poll(0, usize::MAX, &mut obs)?;
                 for o in obs.drain(..) {
                     out_events.extend(engine.process(o));
                 }
                 if out_events.is_empty() {
-                    exit_reason = "agent exited".into();
-                    break;
+                    quiet_ticks += 1;
+                    if quiet_ticks >= QUIET_TICKS_BEFORE_EXIT {
+                        exit_reason = "agent exited".into();
+                        break;
+                    }
+                } else {
+                    quiet_ticks = 0;
                 }
             }
         }

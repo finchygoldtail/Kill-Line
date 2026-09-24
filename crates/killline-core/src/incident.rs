@@ -65,8 +65,11 @@ pub fn next_incident_id(root: &Path, now: DateTime<Utc>) -> Result<(String, Path
         // create_dir is atomic: two monitors cannot claim the same id.
         match fs::create_dir(&dir) {
             Ok(()) => {
-                use std::os::unix::fs::PermissionsExt;
-                fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
+                }
                 return Ok((id, dir));
             }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,

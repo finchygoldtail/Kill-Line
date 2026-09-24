@@ -557,3 +557,170 @@ fn stale_heartbeat_is_grey_not_green() {
     s.degrade("ring buffer drops");
     assert_eq!(s.status, Status::Grey);
 }
+
+// ---------------- Windows rules (checked on every host) ----------------
+
+fn win_engine() -> Engine {
+    let p = Policy::parse(include_str!("../../../policies/windows-no-network.yaml")).unwrap();
+    Engine::new(
+        p.compile_for(killline_core::policy::Platform::Windows)
+            .unwrap(),
+        "w1",
+        None,
+    )
+}
+
+fn win_obs(engine: &mut Engine, kind: ObsKind) -> Event {
+    engine
+        .process(Observation {
+            timestamp: Utc::now(),
+            process: ProcessInfo {
+                pid: 7,
+                tid: 7,
+                comm: "python.exe".into(),
+                ..Default::default()
+            },
+            kind,
+            runtime_setup: false,
+            outcome: None,
+        })
+        .remove(0)
+}
+
+fn win_open(engine: &mut Engine, raw: &str, access: FileAccess) -> Event {
+    let path = killline_core::pathmatch::canonical_windows(raw);
+    win_obs(
+        engine,
+        ObsKind::Open {
+            path,
+            access,
+            flags: 0,
+            resolution: "kernel".into(),
+            via: None,
+        },
+    )
+}
+
+#[test]
+fn windows_workspace_and_system_files_are_allowed() {
+    let mut e = win_engine();
+    assert!(win_open(&mut e, r"C:\agent\task.md", FileAccess::Read).allowed);
+    assert!(
+        win_open(&mut e, r"C:\AGENT\Output\report.txt", FileAccess::Write).allowed,
+        "case-insensitive"
+    );
+    assert!(
+        win_open(
+            &mut e,
+            r"C:\Windows\System32\kernel32.dll",
+            FileAccess::Read
+        )
+        .allowed
+    );
+    assert!(win_open(&mut e, r"\Device\Afd", FileAccess::Read).allowed);
+    assert_eq!(
+        win_open(&mut e, r"C:\", FileAccess::Read).action,
+        "file.traverse"
+    );
+    assert_eq!(
+        win_open(&mut e, r"C:\Users\Bob", FileAccess::Read).verdict,
+        Verdict::Violation,
+        "not an ancestor"
+    );
+    let e2 = win_open(&mut e, r"C:\agent\task.md", FileAccess::Write);
+    assert_eq!(
+        e2.verdict,
+        Verdict::Violation,
+        "workspace is read-only except output"
+    );
+}
+
+#[test]
+fn windows_credentials_and_docker_pipe() {
+    let mut e = win_engine();
+    let ev = win_open(&mut e, r"C:\Users\Bob\.aws\credentials", FileAccess::Read);
+    assert_eq!(ev.category, Category::Credential);
+    let ev = win_open(
+        &mut e,
+        r"C:\Users\Bob\AppData\Local\Google\Chrome\User Data\Default\Login Data",
+        FileAccess::Read,
+    );
+    assert_eq!(ev.category, Category::Credential);
+    let ev = win_open(&mut e, r"C:\Windows\System32\config\SAM", FileAccess::Read);
+    assert_eq!(
+        ev.category,
+        Category::Credential,
+        "hive files before the C:\\Windows runtime allowance"
+    );
+    let ev = win_open(
+        &mut e,
+        r"\Device\NamedPipe\docker_engine",
+        FileAccess::Write,
+    );
+    assert_eq!(ev.category, Category::ContainerRuntime);
+    let ev = win_open(&mut e, r"\\.\PhysicalDrive0", FileAccess::Read);
+    assert_eq!(ev.category, Category::ContainerEscape);
+    let ev = win_open(
+        &mut e,
+        r"C:\Users\Bob\Documents\notes.txt",
+        FileAccess::Read,
+    );
+    assert_eq!(ev.category, Category::Filesystem);
+}
+
+#[test]
+fn windows_process_names() {
+    let mut e = win_engine();
+    let ex = |p: &str| ObsKind::Exec {
+        path: killline_core::pathmatch::canonical_windows(p),
+        argv: vec![],
+        sha256: None,
+        exists: true,
+    };
+    assert!(
+        win_obs(&mut e, ex(r"C:\Python312\python.exe")).allowed,
+        "python matches python.exe"
+    );
+    assert_eq!(
+        win_obs(
+            &mut e,
+            ex(r"C:\Windows\System32\WindowsPowerShell\v1.0\PowerShell.exe")
+        )
+        .action,
+        "process.exec_denied"
+    );
+    assert_eq!(
+        win_obs(&mut e, ex(r"C:\Windows\System32\schtasks.exe")).action,
+        "process.exec_privileged"
+    );
+    assert_eq!(
+        win_obs(&mut e, ex(r"C:\Windows\System32\wsl.exe")).action,
+        "process.exec_privileged"
+    );
+    assert_eq!(
+        win_obs(&mut e, ex(r"C:\Windows\System32\whoami.exe")).action,
+        "process.exec_unexpected"
+    );
+}
+
+#[test]
+fn windows_network_rules_match_linux() {
+    let mut e = win_engine();
+    let ev = win_obs(
+        &mut e,
+        ObsKind::Net {
+            op: NetOp::Connect,
+            addr: "169.254.169.254".parse().unwrap(),
+            port: 80,
+        },
+    );
+    assert_eq!(ev.category, Category::CloudMetadata);
+    let ev = win_obs(
+        &mut e,
+        ObsKind::Dns {
+            server: None,
+            query: Some("example.com".into()),
+        },
+    );
+    assert_eq!(ev.verdict, Verdict::Violation);
+}

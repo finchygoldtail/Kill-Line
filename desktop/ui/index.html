@@ -14,15 +14,15 @@
   <p class="tag">Independent containment verification for AI agents</p>
 
   <section id="idle" class="card">
-    <p>Kill Line watches AI agents from outside their sandbox. To do that it loads a small, observe-only sensor into the Linux kernel, which needs administrator permission.</p>
-    <p class="muted">Your system will ask for your password. Nothing leaves this computer: no account, no cloud, no telemetry.</p>
+    <p>Kill Line watches AI agents from outside their sandbox. To see what they do at the operating-system level, it needs administrator permission.</p>
+    <p class="muted">Your system may ask you to confirm. Nothing leaves this computer: no account, no cloud, no telemetry.</p>
     <button id="go" class="btn primary" type="button">Start Kill Line</button>
   </section>
 
   <section id="busy" class="card" hidden>
     <div class="spinner" aria-hidden="true"></div>
-    <p id="busy-text">Waiting for administrator permission…</p>
-    <p class="muted">Enter your password in the system prompt to load the kernel sensor.</p>
+    <p id="busy-text">Starting the Kill Line engine…</p>
+    <p class="muted">Confirm in the system prompt if one appears.</p>
   </section>
 
   <section id="failed" class="card bad" hidden>

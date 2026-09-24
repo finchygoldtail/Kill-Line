@@ -2,12 +2,13 @@
 
 mod launch;
 mod monitor;
+mod platform;
 mod ui;
 mod views;
 
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
-use killline_core::policy::{Level, Policy, ResponseAction, TEMPLATES};
+use killline_core::policy::{templates_for, Level, Platform, Policy, ResponseAction, TEMPLATES};
 use killline_core::store;
 use std::path::PathBuf;
 
@@ -146,7 +147,7 @@ enum Cmd {
 fn main() {
     let cli = Cli::parse();
     views::set_color(
-        !cli.no_color && std::env::var_os("NO_COLOR").is_none() && unsafe { libc::isatty(1) } == 1,
+        !cli.no_color && std::env::var_os("NO_COLOR").is_none() && platform::stdout_is_tty(),
     );
     let root = cli.data_dir.clone().unwrap_or_else(store::data_dir);
     let code = match run(cli, root) {
@@ -262,7 +263,7 @@ fn run(cli: Cli, root: PathBuf) -> Result<i32> {
         }
         Cmd::Template { name } => match name {
             None => {
-                for (n, _) in TEMPLATES {
+                for (n, _) in templates_for(Platform::current()) {
                     println!("{}", n);
                 }
                 Ok(0)
@@ -280,6 +281,16 @@ fn run(cli: Cli, root: PathBuf) -> Result<i32> {
             uid,
             gid,
             command,
-        } => launch::exec_after_release(wait_fd, uid, gid, &command),
+        } => {
+            #[cfg(unix)]
+            {
+                launch::exec_after_release(wait_fd, uid, gid, &command)
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = (wait_fd, uid, gid, command);
+                bail!("__launch is only used on Unix")
+            }
+        }
     }
 }

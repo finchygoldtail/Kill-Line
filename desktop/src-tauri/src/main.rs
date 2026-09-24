@@ -51,9 +51,36 @@ struct Started {
     url: String,
 }
 
+/// Running with full privileges: root on Linux, an elevated token on Windows.
+#[cfg(unix)]
 fn is_root() -> bool {
     // SAFETY: geteuid has no preconditions.
     unsafe { libc::geteuid() == 0 }
+}
+
+#[cfg(windows)]
+fn is_root() -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows_sys::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+    // SAFETY: standard token query; the handle is closed.
+    unsafe {
+        let mut token: HANDLE = std::ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+            return false;
+        }
+        let mut elev = TOKEN_ELEVATION { TokenIsElevated: 0 };
+        let mut len = 0u32;
+        let ok = GetTokenInformation(
+            token,
+            TokenElevation,
+            &mut elev as *mut _ as *mut _,
+            std::mem::size_of::<TOKEN_ELEVATION>() as u32,
+            &mut len,
+        );
+        CloseHandle(token);
+        ok != 0 && elev.TokenIsElevated != 0
+    }
 }
 
 /// Find the killline CLI: $KILLLINE_BIN, the bundled sidecar next to this
@@ -67,7 +94,7 @@ fn find_killline() -> Option<PathBuf> {
     }
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            let side = dir.join("killline");
+            let side = dir.join(if cfg!(windows) { "killline.exe" } else { "killline" });
             if side.is_file() {
                 return Some(side);
             }
@@ -86,11 +113,11 @@ async fn start_backend(app: AppHandle, state: State<'_, AppState>) -> Result<Sta
             return Ok(Started { url: b.url.clone() });
         }
     }
-    if !cfg!(target_os = "linux") {
-        return Err(
-            "Kill Line currently runs on Linux only. Windows and macOS support is on the roadmap."
-                .into(),
-        );
+    if !cfg!(any(target_os = "linux", windows)) {
+        return Err("Kill Line runs on Linux and Windows. macOS support is on the roadmap.".into());
+    }
+    if cfg!(windows) && !is_root() {
+        return Err("Kill Line needs administrator rights on Windows. Right-click Kill Line and choose \"Run as administrator\".".into());
     }
     let bin = find_killline()
         .ok_or("The Kill Line engine (killline) was not found. Reinstall Kill Line.")?;
@@ -104,6 +131,12 @@ async fn start_backend(app: AppHandle, state: State<'_, AppState>) -> Result<Sta
         c.arg(&bin).args(args);
         c
     };
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

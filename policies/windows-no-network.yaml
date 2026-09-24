@@ -1,0 +1,48 @@
+# Windows: an agent confined to its workspace with no network access.
+version: 1
+agent: test-agent
+name: windows-strict-no-network
+description: Workspace-only agent on Windows. No network, no credentials.
+
+filesystem:
+  allow_read:
+    - C:\agent
+  allow_write:
+    - C:\agent\output
+    - ~/AppData/Local/Temp
+  deny:
+    - C:\Users\Public
+    - ~/Documents
+    - ~/Desktop
+
+network:
+  mode: deny
+
+processes:
+  allow:
+    - python
+    - python3
+    - py
+  deny:
+    - powershell
+    - pwsh
+    - cmd
+    - curl
+    - certutil
+    - bitsadmin
+  deny_privileged: true
+
+credentials:
+  access: deny
+
+cloud_metadata:
+  access: deny
+
+container_runtime:
+  access: deny
+
+untrusted_inputs:
+  - C:\agent\untrusted
+
+response:
+  violation: alert

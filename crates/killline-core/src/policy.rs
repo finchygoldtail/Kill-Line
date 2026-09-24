@@ -8,6 +8,24 @@ use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::path::Path;
 
+/// Which operating system's conventions (paths, built-in lists) apply.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Platform {
+    Linux,
+    Windows,
+}
+
+impl Platform {
+    pub fn current() -> Platform {
+        if cfg!(windows) {
+            Platform::Windows
+        } else {
+            Platform::Linux
+        }
+    }
+}
+
 /// Maximum accepted policy size. Policies are small; refuse anything large.
 const MAX_POLICY_BYTES: u64 = 256 * 1024;
 const MAX_LIST_ENTRIES: usize = 1024;
@@ -424,6 +442,136 @@ pub const RUNTIME_WRITE_PATHS: &[&str] = &[
     "/dev/fd",
 ];
 
+/// The built-in lists for one platform.
+pub struct Builtins {
+    pub runtime_read: &'static [&'static str],
+    pub credentials: &'static [&'static str],
+    pub runtime_write: &'static [&'static str],
+    pub escape: &'static [(&'static str, &'static str)],
+    pub runtime_sockets: &'static [&'static str],
+    pub privilege_tools: &'static [&'static str],
+}
+
+pub const LINUX_BUILTINS: Builtins = Builtins {
+    runtime_read: RUNTIME_READ_PATHS,
+    credentials: DEFAULT_CREDENTIAL_PATHS,
+    runtime_write: RUNTIME_WRITE_PATHS,
+    escape: ESCAPE_INDICATORS,
+    runtime_sockets: RUNTIME_SOCKETS,
+    privilege_tools: LINUX_PRIVILEGE_TOOLS,
+};
+
+pub const WINDOWS_BUILTINS: Builtins = Builtins {
+    runtime_read: WINDOWS_RUNTIME_READ_PATHS,
+    credentials: WINDOWS_CREDENTIAL_PATHS,
+    runtime_write: WINDOWS_RUNTIME_WRITE_PATHS,
+    escape: WINDOWS_ESCAPE_INDICATORS,
+    runtime_sockets: WINDOWS_RUNTIME_PIPES,
+    privilege_tools: WINDOWS_PRIVILEGE_TOOLS,
+};
+
+/// Executables that exist to change privilege or escape confinement (Linux).
+pub const LINUX_PRIVILEGE_TOOLS: &[&str] = &[
+    "sudo", "su", "doas", "pkexec", "runuser", "setpriv", "nsenter", "unshare", "capsh", "chroot",
+    "mount", "umount", "insmod", "modprobe", "newgrp", "sg", "docker", "podman", "nerdctl", "ctr",
+    "crictl", "kubectl",
+];
+
+// ---------------- Windows built-ins (canonical, lowercase) ----------------
+
+/// Credential-sensitive locations on Windows. `~/` means any user profile.
+pub const WINDOWS_CREDENTIAL_PATHS: &[&str] = &[
+    "~/.ssh",
+    "~/.aws",
+    "~/.azure",
+    "~/.kube",
+    "~/.docker/config.json",
+    "~/.git-credentials",
+    "~/.netrc",
+    "~/_netrc",
+    "~/.npmrc",
+    "~/.pypirc",
+    "~/appdata/roaming/gcloud",
+    "~/appdata/roaming/github cli/hosts.yml",
+    "~/appdata/roaming/microsoft/credentials",
+    "~/appdata/local/microsoft/credentials",
+    "~/appdata/roaming/microsoft/protect",
+    "~/appdata/roaming/microsoft/crypto",
+    "~/appdata/local/google/chrome/user data/*/login data",
+    "~/appdata/local/google/chrome/user data/*/network/cookies",
+    "~/appdata/local/microsoft/edge/user data/*/login data",
+    "~/appdata/local/microsoft/edge/user data/*/network/cookies",
+    "~/appdata/roaming/mozilla/firefox/profiles/*/logins.json",
+    "~/appdata/roaming/mozilla/firefox/profiles/*/key4.db",
+    "**/.env",
+    "**/.env.*",
+    "**/credentials.json",
+    "**/service-account*.json",
+    "**/id_rsa*",
+    "**/id_ecdsa*",
+    "**/id_ed25519*",
+    "/*:/windows/system32/config/sam",
+    "/*:/windows/system32/config/security",
+    "/*:/windows/system32/config/system",
+    "/*:/windows/ntds/ntds.dit",
+];
+
+/// Container-runtime control pipes on Windows (Docker Desktop, containerd,
+/// Podman). Reaching one grants control of containers and often the host.
+pub const WINDOWS_RUNTIME_PIPES: &[&str] = &[
+    "/pipe/docker_engine",
+    "/pipe/docker_engine_linux",
+    "/pipe/dockerdesktoplinuxengine",
+    "/pipe/dockerdesktopengine",
+    "/pipe/docker_cli",
+    "/pipe/containerd-containerd",
+    "/pipe/podman-machine-default",
+];
+
+pub const WINDOWS_ESCAPE_INDICATORS: &[(&str, &str)] = &[
+    ("/device/physicalmemory", "physical memory device"),
+    ("/physicaldrive*", "raw disk device"),
+    ("/device/harddisk*/dr*", "raw disk device"),
+];
+
+pub const WINDOWS_RUNTIME_READ_PATHS: &[&str] = &[
+    "/*:/windows",
+    "/*:/program files",
+    "/*:/program files (x86)",
+    "/*:/programdata/microsoft",
+    "~/appdata/local/programs",
+    "/device",
+    "/pipe",
+];
+
+pub const WINDOWS_RUNTIME_WRITE_PATHS: &[&str] = &["/device", "/pipe"];
+
+/// Programs used to change privilege, persist, tamper with logs, or leave
+/// the sandbox on Windows. Matched without the `.exe` suffix.
+pub const WINDOWS_PRIVILEGE_TOOLS: &[&str] = &[
+    "runas",
+    "psexec",
+    "psexec64",
+    "paexec",
+    "schtasks",
+    "sc",
+    "bcdedit",
+    "vssadmin",
+    "wevtutil",
+    "takeown",
+    "reg",
+    "regedit",
+    "mimikatz",
+    "procdump",
+    "docker",
+    "kubectl",
+    "podman",
+    "nerdctl",
+    "wsl",
+    "wslhost",
+    "wslconfig",
+];
+
 /// Well-known cloud instance-metadata endpoints.
 pub const METADATA_IPS: &[(&str, &str)] = &[
     (
@@ -449,6 +597,11 @@ pub const METADATA_HOSTS: &[&str] = &[
 #[derive(Debug, Clone)]
 pub struct CompiledPolicy {
     pub source: Policy,
+    pub platform: Platform,
+    /// Programs whose execution counts as a privilege change on this platform.
+    pub privilege_tools: &'static [&'static str],
+    /// Escape-indicator patterns with a description.
+    pub escape_info: &'static [(&'static str, &'static str)],
     pub read_allow: PatternSet,
     pub write_allow: PatternSet,
     pub deny: PatternSet,
@@ -521,9 +674,14 @@ impl Policy {
         for (name, list) in &lists {
             check_list(&mut d, name, list);
             for p in list.iter() {
-                if !(p.starts_with('/') || p.starts_with("~/") || p.starts_with("**/")) {
+                if !(p.starts_with('/')
+                    || p.starts_with("~/")
+                    || p.starts_with("~\\")
+                    || p.starts_with("**/")
+                    || pathmatch::is_windows_absolute(p))
+                {
                     d.push(Diagnostic::error(format!(
-                        "{}: '{}' must be an absolute path, start with ~/ or **/",
+                        "{}: '{}' must be an absolute path (/x or C:\\x), start with ~/ or **/",
                         name, p
                     )));
                 }
@@ -620,6 +778,12 @@ impl Policy {
     }
 
     pub fn compile(&self) -> Result<CompiledPolicy> {
+        self.compile_for(Platform::current())
+    }
+
+    /// Compile for a specific platform (tests use this to check Windows
+    /// rules on any host).
+    pub fn compile_for(&self, platform: Platform) -> Result<CompiledPolicy> {
         let errors: Vec<_> = self
             .validate()
             .into_iter()
@@ -635,36 +799,57 @@ impl Policy {
                     .join("\n")
             );
         }
-        let expand = |v: &[String]| -> Vec<String> {
-            v.iter().flat_map(|p| pathmatch::expand_home(p)).collect()
+        let win = platform == Platform::Windows;
+        let expand_one = |p: &str| -> Vec<String> {
+            if win {
+                pathmatch::expand_home_windows(p)
+            } else {
+                pathmatch::expand_home(p)
+            }
         };
+        let expand =
+            |v: &[String]| -> Vec<String> { v.iter().flat_map(|p| expand_one(p)).collect() };
         let mut read_allow = expand(&self.filesystem.allow);
         read_allow.extend(expand(&self.filesystem.allow_read));
         let mut write_allow = expand(&self.filesystem.allow);
         write_allow.extend(expand(&self.filesystem.allow_write));
         // Writable implies readable.
         read_allow.extend(write_allow.clone());
+        let b = if win {
+            &WINDOWS_BUILTINS
+        } else {
+            &LINUX_BUILTINS
+        };
+        let (runtime_list, cred_list, write_list, escape_info, sockets, tools) = (
+            b.runtime_read,
+            b.credentials,
+            b.runtime_write,
+            b.escape,
+            b.runtime_sockets,
+            b.privilege_tools,
+        );
         let runtime_read: Vec<String> = match self.filesystem.runtime_read {
-            RuntimeRead::Default => RUNTIME_READ_PATHS.iter().map(|s| s.to_string()).collect(),
+            RuntimeRead::Default => runtime_list.iter().flat_map(|p| expand_one(p)).collect(),
             RuntimeRead::None => vec![],
         };
-        let mut credential_paths: Vec<String> = DEFAULT_CREDENTIAL_PATHS
-            .iter()
-            .flat_map(|p| pathmatch::expand_home(p))
-            .collect();
+        let mut credential_paths: Vec<String> =
+            cred_list.iter().flat_map(|p| expand_one(p)).collect();
         credential_paths.extend(expand(&self.credentials.extra_paths));
         Ok(CompiledPolicy {
             source: self.clone(),
+            platform,
+            privilege_tools: tools,
+            escape_info,
             read_allow: PatternSet::new(read_allow),
             write_allow: PatternSet::new(write_allow),
             deny: PatternSet::new(expand(&self.filesystem.deny)),
             runtime_read: PatternSet::new(runtime_read),
-            runtime_write: PatternSet::new(RUNTIME_WRITE_PATHS.iter()),
+            runtime_write: PatternSet::new(write_list.iter()),
             credential_paths: PatternSet::new(credential_paths),
             credential_allow: PatternSet::new(expand(&self.credentials.allow_paths)),
             untrusted: PatternSet::new(expand(&self.untrusted_inputs)),
-            escape_indicators: PatternSet::new(ESCAPE_INDICATORS.iter().map(|(p, _)| *p)),
-            runtime_sockets: PatternSet::new(RUNTIME_SOCKETS.iter()),
+            escape_indicators: PatternSet::new(escape_info.iter().map(|(p, _)| *p)),
+            runtime_sockets: PatternSet::new(sockets.iter()),
             cidrs: self
                 .network
                 .allow_cidr
@@ -813,7 +998,24 @@ pub const TEMPLATES: &[(&str, &str)] = &[
         "no-network",
         include_str!("../../../policies/no-network.yaml"),
     ),
+    (
+        "windows-no-network",
+        include_str!("../../../policies/windows-no-network.yaml"),
+    ),
+    (
+        "windows-coding-agent",
+        include_str!("../../../policies/windows-coding-agent.yaml"),
+    ),
 ];
+
+/// Templates meant for the platform Kill Line is running on.
+pub fn templates_for(platform: Platform) -> Vec<(&'static str, &'static str)> {
+    TEMPLATES
+        .iter()
+        .copied()
+        .filter(|(n, _)| n.starts_with("windows-") == (platform == Platform::Windows))
+        .collect()
+}
 
 #[cfg(test)]
 mod tests {
@@ -823,7 +1025,13 @@ mod tests {
     fn all_templates_are_valid() {
         for (name, text) in TEMPLATES {
             let p = Policy::parse(text).unwrap_or_else(|e| panic!("{}: {:#}", name, e));
-            p.compile().unwrap_or_else(|e| panic!("{}: {:#}", name, e));
+            let platform = if name.starts_with("windows-") {
+                Platform::Windows
+            } else {
+                Platform::Linux
+            };
+            p.compile_for(platform)
+                .unwrap_or_else(|e| panic!("{}: {:#}", name, e));
         }
     }
 
