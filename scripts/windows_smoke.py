@@ -20,6 +20,13 @@ import tempfile
 import threading
 import time
 
+# Kill Line prints UTF-8 (box drawing, em dashes); Windows defaults to cp1252.
+for stream in (sys.stdout, sys.stderr):
+    try:
+        stream.reconfigure(encoding="utf-8", errors="replace")
+    except AttributeError:
+        pass
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KL = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "target", "release", "killline.exe"))
 AGENT = os.path.join(ROOT, "test-agent", "test_agent.py")
@@ -96,7 +103,7 @@ def run(modes):
     print(f"\n=== killline run -- test_agent.py {' '.join(modes)}", flush=True)
     t0 = time.time()
     p = subprocess.run([KL, "--no-color", "run", "--policy", policy_path, "--", sys.executable, AGENT, *modes],
-                       env=env, capture_output=True, text=True, timeout=300)
+                       env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
     print(p.stdout[-6000:])
     probe = [l for l in p.stderr.splitlines() if l.startswith("[etw-probe]")]
     other = [l for l in p.stderr.splitlines() if not l.startswith("[etw-probe]")]
@@ -106,7 +113,8 @@ def run(modes):
     for l in probe[:80]:
         print(l)
     print(f"exit={p.returncode} in {time.time() - t0:.1f}s", flush=True)
-    tl = subprocess.run([KL, "--no-color", "timeline", "--json"], env=env, capture_output=True, text=True)
+    tl = subprocess.run([KL, "--no-color", "timeline", "--json"], env=env, capture_output=True, text=True,
+                        encoding="utf-8", errors="replace")
     events = [json.loads(l)["event"] for l in tl.stdout.splitlines() if l.strip()]
     return p.returncode, events
 
@@ -153,9 +161,11 @@ print(f"[INFO] TCP attempt to unroutable 203.0.113.42 {'seen' if got_testnet els
 # 3. Integrity.
 sessions = os.listdir(os.path.join(home, "sessions"))
 for s in sessions:
-    r = subprocess.run([KL, "--no-color", "verify", s], env=env, capture_output=True, text=True)
+    r = subprocess.run([KL, "--no-color", "verify", s], env=env, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
     check(f"hash chain {s}", r.returncode == 0, r.stdout.strip())
-inc = subprocess.run([KL, "--no-color", "incidents"], env=env, capture_output=True, text=True)
+inc = subprocess.run([KL, "--no-color", "incidents"], env=env, capture_output=True, text=True,
+                     encoding="utf-8", errors="replace")
 print(inc.stdout)
 
 print("\nKILLLINE_HOME:", home)
