@@ -126,7 +126,7 @@ enum Cmd {
     },
     /// Verify a session timeline's hash chain or an incident's checksums
     Verify { id: String },
-    /// Check a policy file and explain what KillLine can and cannot verify
+    /// Check a policy file and explain what Kill Line can and cannot verify
     ValidatePolicy { file: PathBuf },
     /// Print a bundled policy template (omit NAME to list them)
     Template { name: Option<String> },

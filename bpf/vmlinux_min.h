@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0 OR BSD-2-Clause */
 /*
- * Minimal kernel type definitions for the KillLine eBPF sensor.
+ * Minimal kernel type definitions for the Kill Line eBPF sensor.
  *
- * Only the fields KillLine reads are declared. Struct layouts are resolved
+ * Only the fields Kill Line reads are declared. Struct layouts are resolved
  * at load time against the running kernel's BTF (CO-RE, via
  * preserve_access_index), so these definitions do not need to match the
  * kernel's real layout -- only the field names and types must exist.

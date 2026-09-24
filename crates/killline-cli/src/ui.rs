@@ -69,7 +69,7 @@ pub fn serve(
         );
         let _ = std::io::stdout().flush();
     } else {
-        println!("KillLine dashboard running at:\n\n    {}\n", url);
+        println!("Kill Line dashboard running at:\n\n    {}\n", url);
         println!("Local only (127.0.0.1). The link contains an access token; do not share it.");
         println!("Data directory: {}", ctx.root.display());
         println!("Press Ctrl+C to stop the dashboard. Running monitors keep running.");

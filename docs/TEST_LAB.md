@@ -12,7 +12,7 @@ A Docker Compose environment for safely simulating containment violations. **Not
 | `workspace/` | Task, sources, an "untrusted" README (contains **no** real injection) and a generated corpus | Plain text |
 | `no-network.yaml` | The strict policy the demos use | |
 
-KillLine itself runs **on the host**, outside the lab. That is the point: the monitor is not inside the thing it verifies.
+Kill Line itself runs **on the host**, outside the lab. That is the point: the monitor is not inside the thing it verifies.
 
 ## Setup
 
@@ -66,7 +66,7 @@ Environment overrides: `KL_SINK_HOST`/`KL_SINK_PORT` (e.g. `dummy-sink`/`9000` f
 Recorded on Linux 6.18 (Firecracker VM), Docker 29.3:
 
 - **Demo 1:** GREEN during `normal`. The outbound connect raised RED *Network Isolation* with result `failed (ENETUNREACH)`, so the internal network held. The incident bundle had 8 files and its checksums verified.
-- **Demo 2:** RED *Credential Isolation* with result **SUCCEEDED**: the lab's (deliberate) secret mount is a real containment failure, and KillLine proved it.
+- **Demo 2:** RED *Credential Isolation* with result **SUCCEEDED**: the lab's (deliberate) secret mount is a real containment failure, and Kill Line proved it.
 - **Demo 3:** AMBER "touched 150 distinct files in 10s", with "Possible correlation: … 2.0s after the agent read untrusted input /workspace/untrusted/README.md". Then RED credential (SUCCEEDED), RED `~/.ssh/id_rsa` (ENOENT), RED network with "Possible exfiltration pattern: 2 credential-sensitive access(es) preceded this network attempt".
 - **Tamper:** `kill -9` of the monitor → `killline status` reports GREY "Monitoring process … unexpectedly stopped … Containment status cannot be verified." (exit code 4).
 - **Freeze:** `--response freeze` paused the container (`docker inspect` → `Paused=true`) right after the violation.
@@ -83,7 +83,7 @@ sudo KL_WORKSPACE=/tmp/klws killline run --policy /tmp/p.yaml --user 65534 -- \
     python3 test-agent/test_agent.py all
 ```
 
-On a host without network isolation some "failed" results become "SUCCEEDED" (for example, a transparent proxy may accept the TEST-NET connection). KillLine reports what actually happened.
+On a host without network isolation some "failed" results become "SUCCEEDED" (for example, a transparent proxy may accept the TEST-NET connection). Kill Line reports what actually happened.
 
 ## Teardown
 

@@ -1,4 +1,4 @@
-//! KillLine core: containment policy, deterministic rule engine, behavioural
+//! Kill Line core: containment policy, deterministic rule engine, behavioural
 //! heuristics, flight recorder and forensic bundles.
 //!
 //! This crate has no kernel or platform dependencies so that it can be

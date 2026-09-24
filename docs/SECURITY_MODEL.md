@@ -1,6 +1,6 @@
-# Security model of KillLine itself
+# Security model of Kill Line itself
 
-KillLine runs as root and parses data produced by a potentially hostile agent: paths, DNS packets, command lines and socket addresses. It is therefore treated as security-sensitive software.
+Kill Line runs as root and parses data produced by a potentially hostile agent: paths, DNS packets, command lines and socket addresses. It is therefore treated as security-sensitive software.
 
 ## Principles
 
@@ -13,7 +13,7 @@ KillLine runs as root and parses data produced by a potentially hostile agent: p
 | **Terminal-injection safety** | Every agent-controlled string (paths, comm, argv) has control characters replaced before printing, so an agent cannot inject ANSI escape sequences into the operator's terminal |
 | **Robust output** | Writes to a closed stdout/pipe are ignored; they cannot crash the monitor |
 | **Least privilege for the agent** | `killline run --user UID[:GID]` drops the agent's privileges (setgroups, setgid, setuid) *after* tracking starts. The test lab runs the agent as `65534`, read-only, with `cap_drop: ALL` and `no-new-privileges` |
-| **No network, no telemetry** | KillLine makes no network connections. The only external command it runs is the local `docker` CLI (`inspect`; and `pause`/`kill` only if a response is configured) |
+| **No network, no telemetry** | Kill Line makes no network connections. The only external command it runs is the local `docker` CLI (`inspect`; and `pause`/`kill` only if a response is configured) |
 | **Local, private storage** | `/var/lib/killline` (or `$KILLLINE_HOME`), directories `0700`, files `0600`, atomic replace for snapshots |
 | **Tamper evidence** | Hash-chained timeline (`killline verify <session>`); SHA-256 `checksums.txt` per incident (`killline verify <incident>`); monitor heartbeat → GREY when stale; drop counter → GREY |
 | **Honest status** | Critical coverage gaps and drops always surface. Wording never claims safety; this is enforced by a test (`never_claims_safety`) |
@@ -30,7 +30,7 @@ KillLine runs as root and parses data produced by a potentially hostile agent: p
 - **Operator actions** (freeze/resume/terminate/stop) are passed to the running monitor through a `control.json` file in the root-only session directory. The monitor, which owns the sensor and the tracked PIDs, executes the action and records it in the timeline.
 - **Monitors started from the dashboard** run detached, so they keep running if the dashboard is closed.
 
-## Privileges KillLine needs
+## Privileges Kill Line needs
 
 Root, or at minimum:
 
@@ -39,7 +39,7 @@ Root, or at minimum:
 - `CAP_KILL` (or root): the SIGSTOP/SIGKILL responses in process mode;
 - access to the Docker CLI/socket for container mode. **Note:** Docker socket access is itself equivalent to root.
 
-Running KillLine with fewer capabilities (a dedicated user with file capabilities) is supported by the design but not yet packaged.
+Running Kill Line with fewer capabilities (a dedicated user with file capabilities) is supported by the design but not yet packaged.
 
 ## Supply chain
 

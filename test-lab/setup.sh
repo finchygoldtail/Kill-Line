@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepare and start the KillLine test lab.
+# Prepare and start the Kill Line test lab.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # A synthetic corpus for the enumeration demo (harmless text files).

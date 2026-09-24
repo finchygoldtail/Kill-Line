@@ -1,6 +1,6 @@
 //! Redaction of secrets from command lines and other free text.
 //!
-//! KillLine never reads file contents, but command-line arguments and
+//! Kill Line never reads file contents, but command-line arguments and
 //! environment-style assignments frequently carry tokens. Everything that
 //! looks secret is replaced before it reaches the timeline.
 

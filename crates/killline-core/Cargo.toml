@@ -1,6 +1,6 @@
 [package]
 name = "killline-core"
-description = "KillLine policy engine, event model, flight recorder and incident bundles (no kernel dependencies)"
+description = "Kill Line policy engine, event model, flight recorder and incident bundles (no kernel dependencies)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

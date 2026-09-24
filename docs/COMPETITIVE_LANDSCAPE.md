@@ -1,14 +1,14 @@
-# KillLine: competitor and open-source research notes
+# Kill Line: competitor and open-source research notes
 
 Research date: 2026-09-24. Sources are web searches and page fetches from that date. Claims marked **(unverified)** come only from secondary summaries, or we could not confirm them on a primary page. Star counts and version numbers are snapshots.
 
-KillLine concept, for reference: an independent, host-side eBPF monitor. It checks that an AI agent in a Linux/Docker sandbox stays inside a declared containment policy (no network, filesystem allowlist, no credentials, no cloud metadata, no docker socket, no privilege escalation). When the agent crosses a boundary, it writes a forensic timeline and incident bundle.
+Kill Line concept, for reference: an independent, host-side eBPF monitor. It checks that an AI agent in a Linux/Docker sandbox stays inside a declared containment policy (no network, filesystem allowlist, no credentials, no cloud metadata, no docker socket, no privilege escalation). When the agent crosses a boundary, it writes a forensic timeline and incident bundle.
 
 ---
 
 ## TL;DR
 
-- **The concept already exists in several forms. Each piece has shipped by now, but no single product combines all of them the way KillLine would.**
+- **The concept already exists in several forms. Each piece has shipped by now, but no single product combines all of them the way Kill Line would.**
 - The closest overlaps are **StrongDM Leash** (open source: container plus eBPF plus Cedar policy plus MCP observer), **eunomia AgentSight / ActPlane** (open-source eBPF observability and enforcement for agents), **agentrec** (eBPF "flight recorder for AI agents", BSL-licensed with a hosted console) and **Sysdig/Falco** (managed Falco rules for coding agents; Prempti works at the hook level).
 - Large vendors are now moving to the endpoint and runtime layer: CrowdStrike Falcon Guardian (Sep 2026), Wiz runtime sensor, Upwind, Oligo, ARMO, Metoro. Most of them are Kubernetes/cloud CNAPP products, or Windows/macOS endpoint products.
 - Most "AI agent security" vendors (Zenity, Noma, Lasso, Prompt/SentinelOne, Lakera/Check Point, Aim/Cato, Straiker, HiddenLayer, Prisma AIRS, Cisco AI Defense, Snyk/Invariant, Operant) work at the **prompt, LLM gateway, tool-call, MCP or SaaS-posture layer**. They do **not** independently verify OS-level sandbox boundaries.
@@ -109,7 +109,7 @@ The pattern across these incidents: the dangerous step is almost always an **OS-
 
 ## 5. Verdict
 
-**Is it differentiated? Only somewhat, and the gap is closing fast.** "eBPF monitor for AI agents with a policy and an audit trail" is no longer novel in September 2026. Leash, AgentSight/ActPlane, agentrec, Metoro, Sysdig's managed rules and CrowdStrike Falcon Guardian all cover large parts of it. A KillLine that is just "Falco/Tetragon rules for agents" would be a commodity. Sysdig already sells that, and Tetragon TracingPolicies can express most of the boundary list in an afternoon.
+**Is it differentiated? Only somewhat, and the gap is closing fast.** "eBPF monitor for AI agents with a policy and an audit trail" is no longer novel in September 2026. Leash, AgentSight/ActPlane, agentrec, Metoro, Sysdig's managed rules and CrowdStrike Falcon Guardian all cover large parts of it. A Kill Line that is just "Falco/Tetragon rules for agents" would be a commodity. Sysdig already sells that, and Tetragon TracingPolicies can express most of the boundary list in an afternoon.
 
 **Closest existing things:**
 1. **StrongDM Leash.** Container plus eBPF plus Cedar policy plus MCP correlation, open source. It is the nearest overall, but it **wraps and launches** the agent (so it is the sandbox) rather than independently verifying someone else's sandbox. It also has no forensic incident bundle.

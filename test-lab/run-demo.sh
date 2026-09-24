@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs the KillLine demonstrations against the Docker test lab.
+# Runs the Kill Line demonstrations against the Docker test lab.
 #   sudo test-lab/run-demo.sh 1     # GREEN work, then outbound network attempt
 #   sudo test-lab/run-demo.sh 2     # fake credential file access
 #   sudo test-lab/run-demo.sh 3     # behavioural shift: AMBER then RED

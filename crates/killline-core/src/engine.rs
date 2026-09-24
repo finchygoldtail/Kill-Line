@@ -149,7 +149,7 @@ impl Engine {
         self.seq
     }
 
-    /// Create a KillLine-originated event (coverage, drops, responses).
+    /// Create a Kill Line-originated event (coverage, drops, responses).
     pub fn notice(
         &mut self,
         category: Category,
@@ -372,7 +372,7 @@ impl Engine {
             out.push(Correlation {
                 summary: format!(
                     "Possible correlation: this happened {:.1}s after the agent read untrusted input {}. \
-                     This may indicate indirect prompt injection; KillLine cannot prove causation.",
+                     This may indicate indirect prompt injection; Kill Line cannot prove causation.",
                     secs,
                     r.untrusted_read.as_deref().unwrap_or("")
                 ),
@@ -598,8 +598,8 @@ impl Engine {
                             "tamper.signal_monitor",
                             Severity::Critical,
                             "monitor.integrity",
-                            "The agent must not interfere with KillLine",
-                            format!("The agent sent signal {} to the KillLine monitor process.", signal),
+                            "The agent must not interfere with Kill Line",
+                            format!("The agent sent signal {} to the Kill Line monitor process.", signal),
                         );
                     }
                 }
@@ -747,7 +747,7 @@ impl Engine {
                 Category::Filesystem,
                 "file.open_unresolved",
                 format!(
-                    "Opened relative path '{}' that KillLine could not resolve from outside the process. \
+                    "Opened relative path '{}' that Kill Line could not resolve from outside the process. \
                      If the open succeeded, the kernel-resolved path is recorded separately.",
                     path
                 ),
@@ -805,7 +805,7 @@ impl Engine {
                         "No access to credentials",
                         format!(
                             "The agent tried to {} {}{}, a credential-sensitive location. This policy does not allow \
-                             credential access. (KillLine records only that access was attempted; it never reads the contents.)",
+                             credential access. (Kill Line records only that access was attempted; it never reads the contents.)",
                             verb, path, how
                         ),
                     );
@@ -998,7 +998,7 @@ impl Engine {
                         Category::Network,
                         "net.connect_attributed",
                         format!(
-                            "Connected to {}. Destination not verified: KillLine V1 does not see DNS answers; \
+                            "Connected to {}. Destination not verified: Kill Line V1 does not see DNS answers; \
                              the agent resolved allowed domain {} {}s earlier.",
                             dest,
                             dom,

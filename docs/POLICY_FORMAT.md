@@ -1,12 +1,12 @@
 # Policy format (version 1)
 
-A policy is a YAML **containment contract**: what the agent is allowed to do. KillLine reports everything outside it. Unknown keys are rejected, so a typo cannot silently weaken a policy. Check a policy with:
+A policy is a YAML **containment contract**: what the agent is allowed to do. Kill Line reports everything outside it. Unknown keys are rejected, so a typo cannot silently weaken a policy. Check a policy with:
 
 ```sh
 killline validate-policy policy.yaml
 ```
 
-`validate-policy` also tells you which parts of the policy KillLine **cannot** fully verify (for example `mcp:` in V1).
+`validate-policy` also tells you which parts of the policy Kill Line **cannot** fully verify (for example `mcp:` in V1).
 
 Templates: `killline template` lists them; `killline template offline-research > policy.yaml` writes one. They live in [`policies/`](../policies).
 
@@ -92,7 +92,7 @@ A **failed** write attempt to `__pycache__`/`*.pyc` is recorded as benign (inter
 
 `~/.ssh`, `~/.aws`, `~/.azure`, `~/.config/gcloud`, `~/.kube`, `~/.docker/config.json`, `~/.netrc`, `~/.git-credentials`, `~/.npmrc`, `~/.pypirc`, `~/.gnupg`, `~/.config/gh/hosts.yml`, `~/.password-store`, `**/.env`, `**/.env.*`, `**/credentials.json`, `**/service-account*.json`, `**/id_rsa*`, `**/id_ecdsa*`, `**/id_ed25519*`, `/etc/shadow`, `/etc/gshadow`, `/etc/sudoers`, `/etc/kubernetes`, `/var/run/secrets`, `/run/secrets`, `/proc/<other-pid>/environ`.
 
-KillLine records **that** one of these was accessed. It never reads the contents.
+Kill Line records **that** one of these was accessed. It never reads the contents.
 
 ### Runtime baseline (`runtime_read: default`)
 
@@ -120,7 +120,7 @@ Read-only locations every Linux program touches: `/usr`, `/lib*`, `/bin`, `/sbin
 - `violation: terminate`: `docker kill`, or SIGKILL the tracked processes.
 - `on_degraded`: the same actions, triggered when events are dropped. Use `freeze` for fail-closed monitoring.
 
-Responses happen **after** the triggering syscall has entered the kernel. KillLine V1 does not prevent the first violating action. `--response` on the CLI overrides `response.violation`.
+Responses happen **after** the triggering syscall has entered the kernel. Kill Line V1 does not prevent the first violating action. `--response` on the CLI overrides `response.violation`.
 
 ## Limits and validation
 

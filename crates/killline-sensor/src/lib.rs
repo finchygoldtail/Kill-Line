@@ -1,4 +1,4 @@
-//! KillLine eBPF sensor.
+//! Kill Line eBPF sensor.
 //!
 //! Loads the kernel program, scopes it to one agent (a PID tree or a
 //! container's PID namespace), and yields decoded [`Observation`]s. It also
@@ -333,11 +333,11 @@ impl Sensor {
 
     pub fn start(scope: &Scope) -> Result<Sensor> {
         if !Self::built_with_bpf() {
-            bail!("this build of KillLine has no eBPF program (clang/libbpf-dev were missing at build time)");
+            bail!("this build of Kill Line has no eBPF program (clang/libbpf-dev were missing at build time)");
         }
         raise_memlock();
         let btf = Btf::from_sys_fs().context(
-            "kernel BTF (/sys/kernel/btf/vmlinux) is unavailable; KillLine needs a kernel built with CONFIG_DEBUG_INFO_BTF",
+            "kernel BTF (/sys/kernel/btf/vmlinux) is unavailable; Kill Line needs a kernel built with CONFIG_DEBUG_INFO_BTF",
         )?;
         let mut bpf = EbpfLoader::new().btf(Some(&btf)).load(BPF_OBJECT).context(
             "loading the eBPF program (are you root / do you have CAP_BPF + CAP_PERFMON?)",

@@ -1,6 +1,6 @@
 //! Optional enforcement (Phase 3). Off by default.
 //!
-//! These actions happen *after* the triggering system call: KillLine
+//! These actions happen *after* the triggering system call: Kill Line
 //! observes, it does not prevent. Freezing preserves state for inspection.
 
 use anyhow::{bail, Context, Result};

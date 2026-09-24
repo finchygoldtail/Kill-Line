@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the KillLine desktop app (Linux): .deb and .AppImage.
+# Build the Kill Line desktop app (Linux): .deb and .AppImage.
 #
 # Prerequisites (Debian/Ubuntu):
 #   sudo apt install clang libbpf-dev libwebkit2gtk-4.1-dev libgtk-3-dev \

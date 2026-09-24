@@ -1,4 +1,4 @@
-"""Syscall-heavy synthetic workload for KillLine overhead measurement.
+"""Syscall-heavy synthetic workload for Kill Line overhead measurement.
 Harmless: opens/reads small local files, stats, and spawns `true`."""
 import os, subprocess, sys, time
 

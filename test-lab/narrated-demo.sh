@@ -27,7 +27,7 @@ printf '%sKILLLINE%s — independent containment verification for AI agents\n' "
 printf '%sTrust the sandbox. Verify the boundary.%s\n' "$D" "$R"
 sleep 1.5
 
-say "The agent runs in a Docker container. KillLine runs on the HOST, outside it."
+say "The agent runs in a Docker container. Kill Line runs on the HOST, outside it."
 run "docker ps --format '{{.Names}}\t{{.Status}}' | grep test-agent"
 
 say "The containment contract: workspace only, no network, no credentials."
@@ -60,5 +60,5 @@ say "The evidence is tamper-evident."
 run "killline verify $ID"
 S=$(ls -t "$KILLLINE_HOME/sessions" | head -1)
 run "killline verify $S"
-printf '\n%sNo monitored boundary violations ≠ safe. KillLine reports what it saw — and what it could not see.%s\n' "$D" "$R"
+printf '\n%sNo monitored boundary violations ≠ safe. Kill Line reports what it saw — and what it could not see.%s\n' "$D" "$R"
 sleep 3

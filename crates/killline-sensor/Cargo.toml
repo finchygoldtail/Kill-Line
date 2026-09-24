@@ -1,6 +1,6 @@
 [package]
 name = "killline-sensor"
-description = "KillLine eBPF sensor: loads the kernel program and decodes its events"
+description = "Kill Line eBPF sensor: loads the kernel program and decodes its events"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

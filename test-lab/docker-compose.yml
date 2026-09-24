@@ -1,9 +1,9 @@
-# KillLine test lab. Everything here is a SAFE SIMULATION:
+# Kill Line test lab. Everything here is a SAFE SIMULATION:
 #  - `labnet` is an internal Docker network: no route to the internet;
 #  - the "secrets" are fake files; the metadata service serves fake data;
 #  - the test agent only opens/connects, it never exfiltrates anything.
 #
-# Usage: see docs/TEST_LAB.md. KillLine itself runs on the host.
+# Usage: see docs/TEST_LAB.md. Kill Line itself runs on the host.
 name: killline-lab
 
 x-python-image: &python_image ${KL_PYTHON_IMAGE:-python:3.12-slim}

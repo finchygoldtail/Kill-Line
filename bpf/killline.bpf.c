@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * KillLine eBPF sensor.
+ * Kill Line eBPF sensor.
  *
  * Observe-only. Attaches to syscall-entry tracepoints and one LSM-adjacent
  * fentry hook, filters to the monitored agent's processes in-kernel, and
@@ -103,7 +103,7 @@ struct kl_result {
 
 struct kl_config {
 	__u32 target_pidns;   /* 0 = PID-tree mode only */
-	__u32 monitor_tgid;   /* never track KillLine itself */
+	__u32 monitor_tgid;   /* never track Kill Line itself */
 };
 
 struct {
@@ -633,7 +633,7 @@ static __always_inline int emit_args(__u32 kind, __u64 a0, __u64 a1, __u64 a2)
 /*
  * A tracepoint's context only contains the arguments its syscall has; the
  * verifier rejects reads past them, so each arity gets its own body.
- * nr values are KillLine-internal identifiers, not syscall numbers.
+ * nr values are Kill Line-internal identifiers, not syscall numbers.
  */
 #define SETID_PROG(name, nr, nargs)                                            \
 	SEC("tracepoint/syscalls/sys_enter_" #name)                            \

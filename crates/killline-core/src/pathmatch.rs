@@ -7,7 +7,7 @@
 
 /// Lexically normalise an absolute path: collapse `//`, `.` and `..`.
 /// This does not touch the filesystem (and so does not resolve symlinks;
-/// KillLine gets kernel-resolved paths from a separate hook for that).
+/// Kill Line gets kernel-resolved paths from a separate hook for that).
 pub fn normalize(path: &str) -> String {
     let mut parts: Vec<&str> = Vec::new();
     for seg in path.split('/') {

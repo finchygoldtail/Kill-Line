@@ -73,7 +73,7 @@ fn rule() -> String {
 }
 
 pub fn banner_start(s: &Session, policy_path: &str) {
-    say!("{}", paint("KillLine monitoring started", BOLD));
+    say!("{}", paint("Kill Line monitoring started", BOLD));
     say!();
     say!("Agent:     {}", clean(&s.agent));
     say!("Target:    {}", clean(&s.target));
@@ -100,7 +100,7 @@ fn response_text(mode: &str) -> &'static str {
 pub fn banner_end(s: &Session, reason: &str) {
     say!();
     say!("{}", paint(&rule(), status_color(s.status)));
-    say!("KillLine monitoring stopped ({})", reason);
+    say!("Kill Line monitoring stopped ({})", reason);
     say!(
         "Status:            {}",
         paint(s.status.label(), status_color(s.status))
@@ -268,7 +268,7 @@ pub fn alert_block(s: &Session, ev: &Event, response: &ResponseAction, incident:
     let r = rule();
     say!();
     say!("{}", paint(&r, RED));
-    say!("{}", paint(" RED — KILLLINE TRIGGERED", RED));
+    say!("{}", paint(" RED — KILL LINE TRIGGERED", RED));
     say!("{}", paint(&r, RED));
     say!(" Agent:     {}", clean(&s.agent));
     say!(" Boundary:  {}", paint(ev.category.boundary_name(), BOLD));
@@ -349,7 +349,7 @@ pub fn status(root: &Path, id: Option<&str>, watch: bool) -> Result<i32> {
         if watch {
             print!("\x1b[2J\x1b[H");
         }
-        say!("{}", paint("KILLLINE", BOLD));
+        say!("{}", paint("KILL LINE", BOLD));
         say!();
         say!("Agent:             {}", clean(&s.agent));
         say!("Target:            {}", clean(&s.target));
@@ -372,7 +372,7 @@ pub fn status(root: &Path, id: Option<&str>, watch: bool) -> Result<i32> {
         }
         if let Some(v) = &s.last_violation {
             say!();
-            say!("{}", paint("RED — KILLLINE TRIGGERED", RED));
+            say!("{}", paint("RED — KILL LINE TRIGGERED", RED));
             say!("{}", v.boundary);
             say!("{} → {}", clean(&v.process), clean(&v.summary));
             say!("Result: {}", outcome_line(v.outcome.as_ref()));
@@ -527,7 +527,7 @@ pub fn inspect(root: &Path, id: &str, raw: bool) -> Result<i32> {
         "   {}",
         paint(
             &format!(
-                "{}  KILLLINE TRIGGERED — {}",
+                "{}  KILL LINE TRIGGERED — {}",
                 time(&inc.trigger),
                 inc.boundary
             ),
@@ -649,7 +649,7 @@ pub fn timeline(root: &Path, id: Option<&str>, all: bool, json: bool) -> Result<
                 "{}",
                 paint(
                     &format!(
-                        "             KILLLINE TRIGGERED — {}",
+                        "             KILL LINE TRIGGERED — {}",
                         e.category.boundary_name()
                     ),
                     RED

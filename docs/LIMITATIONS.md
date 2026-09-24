@@ -1,6 +1,6 @@
 # Limitations (V1)
 
-This page lists what KillLine does not see or cannot guarantee. When a limitation affects visibility at runtime, KillLine reports it as a coverage gap or turns GREY rather than staying silent.
+This page lists what Kill Line does not see or cannot guarantee. When a limitation affects visibility at runtime, Kill Line reports it as a coverage gap or turns GREY rather than staying silent.
 
 ## Visibility gaps (not hooked yet)
 
@@ -23,11 +23,11 @@ This page lists what KillLine does not see or cannot guarantee. When a limitatio
 ## Accuracy limits
 
 - **Detection, not prevention.** Rules fire on syscall *entry*. `freeze`/`terminate` act afterwards, typically within milliseconds. The first violating action is not blocked. Prevention needs BPF-LSM, seccomp or netfilter (Phase 3).
-- **Userspace path resolution is racy.** Relative paths are resolved via `/proc/<pid>/cwd` or `/proc/<pid>/fd/<dirfd>` after the event. Symlinks are resolved inside `/proc/<pid>/root`, with a 1 s cache for intermediate directories (final component always checked). A process that swaps a symlink between its open and KillLine's check can mislead the resolver. When the kernel permits `fentry/security_file_open`, kernel-resolved paths close this gap. KillLine reports at startup when that hook is unavailable.
+- **Userspace path resolution is racy.** Relative paths are resolved via `/proc/<pid>/cwd` or `/proc/<pid>/fd/<dirfd>` after the event. Symlinks are resolved inside `/proc/<pid>/root`, with a 1 s cache for intermediate directories (final component always checked). A process that swaps a symlink between its open and Kill Line's check can mislead the resolver. When the kernel permits `fentry/security_file_open`, kernel-resolved paths close this gap. Kill Line reports at startup when that hook is unavailable.
 - **Userspace reads of syscall arguments are also racy (TOCTOU).** Another thread can change the path buffer after the tracepoint reads it. LSM-level hooks are the robust fix.
 - **Unresolvable relative paths** (the process exited before resolution) are recorded as "unresolved" and not evaluated. The kernel-resolved event, when available, still covers successful opens.
 - **Allowlist by domain** trusts a 300 s window after an allowed DNS query. A hard-coded attacker IP contacted inside that window is labelled "destination not verified", not RED. Use `mode: deny` or CIDR allowlists for high assurance.
-- **UDP `connect()` success** only sets a destination; KillLine words it that way.
+- **UDP `connect()` success** only sets a destination; Kill Line words it that way.
 - **`EINPROGRESS`** non-blocking connects are reported as "in progress"; completion is not observed.
 - **Argument capture** is limited to the first 6 argv entries of 41 characters each, and is redacted heuristically. Redaction can miss unusual secret formats. It can also over-redact.
 - **Executable hashes** are computed from userspace and may be missing for very short-lived programs or files deleted after exec.
@@ -39,8 +39,8 @@ This page lists what KillLine does not see or cannot guarantee. When a limitatio
 
 - Requires Linux ≥ 5.8 (BPF ring buffer) with BTF (`/sys/kernel/btf/vmlinux`). Developed on 6.18.
 - Must run as root (or with `CAP_BPF`, `CAP_PERFMON`, `CAP_SYS_PTRACE` for `/proc/<pid>/root`, and `CAP_DAC_READ_SEARCH`).
-- **Throughput.** ~120k events/s sustained, bursts of ~27k records absorbed by the 16 MB ring buffer. Floods beyond that drop events. KillLine reports the drops and turns GREY, and it can fail closed (`response.on_degraded`).
-- The session timeline is buffered; a crash of KillLine can lose up to ~1 s of timeline (the heartbeat will show GREY).
+- **Throughput.** ~120k events/s sustained, bursts of ~27k records absorbed by the 16 MB ring buffer. Floods beyond that drop events. Kill Line reports the drops and turns GREY, and it can fail closed (`response.on_degraded`).
+- The session timeline is buffered; a crash of Kill Line can lose up to ~1 s of timeline (the heartbeat will show GREY).
 - The hash chain is **tamper-evident, not tamper-proof**: host root can rewrite the entire file. Anchoring the head hash externally (for example signing it) is on the roadmap.
 - Container mode requires a separate PID namespace (not `--pid=host`).
 - One agent per `killline` process in V1.

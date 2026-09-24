@@ -63,8 +63,8 @@ pub enum ObsKind {
         access: FileAccess,
         flags: u64,
         /// "kernel" = resolved by the kernel after symlinks; "lexical" =
-        /// resolved by KillLine from syscall arguments; "userspace-realpath"
-        /// = symlinks resolved by KillLine inside the agent's root (racy).
+        /// resolved by Kill Line from syscall arguments; "userspace-realpath"
+        /// = symlinks resolved by Kill Line inside the agent's root (racy).
         resolution: String,
         /// The path as requested, when it differs from `path` because a
         /// symlink was followed.
@@ -239,7 +239,7 @@ pub struct Observation {
     /// not evaluated. Processes forked by the agent never carry this flag.
     #[serde(default, skip_serializing_if = "is_false")]
     pub runtime_setup: bool,
-    /// Result of the syscall, when KillLine observed it.
+    /// Result of the syscall, when Kill Line observed it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome: Option<Outcome>,
 }
@@ -308,7 +308,7 @@ pub enum Verdict {
     Violation,
     /// Not a policy breach, but unusual behaviour worth attention.
     Anomaly,
-    /// About KillLine itself (coverage, drops, responses).
+    /// About Kill Line itself (coverage, drops, responses).
     Notice,
 }
 

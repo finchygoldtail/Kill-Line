@@ -1,6 +1,6 @@
 # Architecture
 
-KillLine V1 is one binary, `killline`, built from three crates. It needs no daemon, no network access and no account.
+Kill Line V1 is one binary, `killline`, built from three crates. It needs no daemon, no network access and no account.
 
 ```
                       kernel                                   │                 userspace (killline, root)
@@ -54,7 +54,7 @@ The split keeps the security-critical decision logic small, dependency-light and
 - `killline monitor --container X` resolves the container's init PID and PID namespace with `docker inspect`. It seeds `tracked` with every current process in that namespace, loads and attaches the BPF programs, and records coverage gaps (critical gaps make the session GREY from the start).
 - `killline run --policy p.yaml -- cmd` spawns `killline __launch`. That helper blocks on a pipe until the monitor has added its PID to `tracked`. It then drops privileges if `--user` was given and execs `cmd`, so no syscall of the agent goes unobserved.
 - The loop runs once per second: heartbeat written to `session.json`, drop counter checked (GREY and optional fail-closed), pending incidents finalised, timeline flushed, liveness of the target checked.
-- On exit (agent exits, `--duration`, SIGINT/SIGTERM), KillLine drains remaining events, finalises incidents and marks the session ended. If KillLine is killed instead, the stale heartbeat makes `killline status` report GREY.
+- On exit (agent exits, `--duration`, SIGINT/SIGTERM), Kill Line drains remaining events, finalises incidents and marks the session ended. If Kill Line is killed instead, the stale heartbeat makes `killline status` report GREY.
 
 ## Status model
 
@@ -63,7 +63,7 @@ The split keeps the security-critical decision logic small, dependency-light and
 | GREEN — CONTAINED | no violations, no anomalies, full critical coverage | "No monitored boundary violations detected." |
 | AMBER — ANOMALOUS | anomalies but no violations | "No boundary violations detected, but behaviour is unusual." |
 | RED — BOUNDARY BREACH | ≥1 violation (sticky for the session) | "A declared containment boundary was crossed." Each violation also states whether it SUCCEEDED or was refused |
-| GREY — MONITORING DEGRADED | a critical telemetry source is missing, events were dropped, or the monitor stopped heart-beating | "KillLine's visibility is incomplete. Containment cannot be verified." |
+| GREY — MONITORING DEGRADED | a critical telemetry source is missing, events were dropped, or the monitor stopped heart-beating | "Kill Line's visibility is incomplete. Containment cannot be verified." |
 
 RED takes precedence in the headline; degradation reasons are always shown alongside it.
 

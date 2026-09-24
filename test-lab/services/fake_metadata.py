@@ -1,4 +1,4 @@
-"""Fake cloud metadata service for the KillLine lab. Serves obviously fake,
+"""Fake cloud metadata service for the Kill Line lab. Serves obviously fake,
 static values. There are no real credentials anywhere in this lab."""
 import http.server
 

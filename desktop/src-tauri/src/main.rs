@@ -1,6 +1,6 @@
-//! KillLine desktop app.
+//! Kill Line desktop app.
 //!
-//! The dashboard is served by the KillLine backend (`killline ui`), which
+//! The dashboard is served by the Kill Line backend (`killline ui`), which
 //! must run as root to load the eBPF sensor. This app:
 //!
 //! 1. shows a bundled start screen;
@@ -88,12 +88,12 @@ async fn start_backend(app: AppHandle, state: State<'_, AppState>) -> Result<Sta
     }
     if !cfg!(target_os = "linux") {
         return Err(
-            "KillLine currently runs on Linux only. Windows and macOS support is on the roadmap."
+            "Kill Line currently runs on Linux only. Windows and macOS support is on the roadmap."
                 .into(),
         );
     }
     let bin = find_killline()
-        .ok_or("The KillLine engine (killline) was not found. Reinstall KillLine.")?;
+        .ok_or("The Kill Line engine (killline) was not found. Reinstall Kill Line.")?;
     let args = ["ui", "--port", "0", "--announce-json", "--exit-with-stdin"];
     let mut cmd = if is_root() {
         let mut c = Command::new(&bin);
@@ -109,9 +109,9 @@ async fn start_backend(app: AppHandle, state: State<'_, AppState>) -> Result<Sta
         .stderr(Stdio::piped());
     let mut child = cmd.spawn().map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
-            "pkexec (polkit) is not installed, so KillLine cannot ask for administrator permission. Install the pkexec package, or run `sudo killline ui`.".to_string()
+            "pkexec (polkit) is not installed, so Kill Line cannot ask for administrator permission. Install the pkexec package, or run `sudo killline ui`.".to_string()
         } else {
-            format!("Could not start KillLine: {}", e)
+            format!("Could not start Kill Line: {}", e)
         }
     })?;
     let stdin = child.stdin.take().ok_or("no stdin")?;
@@ -137,24 +137,24 @@ async fn start_backend(app: AppHandle, state: State<'_, AppState>) -> Result<Sta
             let mut err = String::new();
             let _ = stderr.read_to_string(&mut err);
             return Err(match status.and_then(|s| s.code()) {
-                _ if err.contains("Error getting authority") => "The system permission service (polkit) is not running, so KillLine cannot ask for administrator permission. Start KillLine from a terminal with `sudo killline ui` instead.".into(),
-                _ if err.contains("No authentication agent") => "No password prompt could be shown: this desktop has no polkit authentication agent. Start KillLine from a terminal with `sudo killline ui` instead.".into(),
+                _ if err.contains("Error getting authority") => "The system permission service (polkit) is not running, so Kill Line cannot ask for administrator permission. Start Kill Line from a terminal with `sudo killline ui` instead.".into(),
+                _ if err.contains("No authentication agent") => "No password prompt could be shown: this desktop has no polkit authentication agent. Start Kill Line from a terminal with `sudo killline ui` instead.".into(),
                 Some(126) => "The permission prompt was cancelled, so the kernel sensor was not loaded.".into(),
                 Some(127) => "Administrator permission was not granted, so the kernel sensor could not be loaded.".into(),
-                _ if err.trim().is_empty() => "The KillLine engine stopped before it was ready.".into(),
-                _ => format!("The KillLine engine stopped: {}", err.trim()),
+                _ if err.trim().is_empty() => "The Kill Line engine stopped before it was ready.".into(),
+                _ => format!("The Kill Line engine stopped: {}", err.trim()),
             });
         }
     };
     let v: serde_json::Value = serde_json::from_str(line.trim())
-        .map_err(|_| "Unexpected output from the KillLine engine.".to_string())?;
+        .map_err(|_| "Unexpected output from the Kill Line engine.".to_string())?;
     let url = v["url"].as_str().unwrap_or_default().to_string();
     let port = v["port"].as_u64().unwrap_or(0) as u16;
     let token = v["token"].as_str().unwrap_or_default().to_string();
     if port == 0 || !url.starts_with(&format!("http://127.0.0.1:{}/#", port)) || token.len() != 32 {
         let _ = child.kill();
         return Err(
-            "The KillLine engine announced an unexpected address; refusing to connect.".into(),
+            "The Kill Line engine announced an unexpected address; refusing to connect.".into(),
         );
     }
     BACKEND_PORT.store(port, Ordering::SeqCst);
@@ -220,15 +220,15 @@ fn start_notifier(app: AppHandle, port: u16, token: String) {
                         let _ = app
                             .notification()
                             .builder()
-                            .title(format!("KillLine triggered: {}", agent))
+                            .title(format!("Kill Line triggered: {}", agent))
                             .body(body)
                             .show();
                     } else if status == "GREY" && ps != "GREY" && !ps.is_empty() {
                         let _ = app
                             .notification()
                             .builder()
-                            .title(format!("KillLine: monitoring degraded for {}", agent))
-                            .body("KillLine's visibility is incomplete. Containment cannot be verified.")
+                            .title(format!("Kill Line: monitoring degraded for {}", agent))
+                            .body("Kill Line's visibility is incomplete. Containment cannot be verified.")
                             .show();
                     }
                 }
@@ -273,7 +273,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![start_backend])
         .setup(|app| {
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                .title("KillLine")
+                .title("Kill Line")
                 .inner_size(1360.0, 900.0)
                 .min_inner_size(900.0, 600.0)
                 .background_color(tauri::window::Color(7, 9, 11, 255))
@@ -282,7 +282,7 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building KillLine");
+        .expect("error while building Kill Line");
     app.run(|handle, event| {
         if let RunEvent::Exit = event {
             stop_backend(handle);

@@ -516,7 +516,7 @@ pub fn resolve_at(pid: u32, dfd: i64, path: &str) -> (String, String) {
 /// own root filesystem (/proc/<pid>/root), without ever following a link
 /// out of that root. Returns None if the process is gone. Racy: the link can
 /// change between the agent's open and this lookup. /proc and /dev/fd are
-/// skipped because their "magic" links would resolve relative to KillLine.
+/// skipped because their "magic" links would resolve relative to Kill Line.
 pub fn realpath_in_root(pid: u32, path: &str) -> Option<String> {
     realpath_in_root_cached(pid, path, &mut |_, check| check())
 }

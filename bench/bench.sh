@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# KillLine overhead benchmark. Run as root on an idle machine:
+# Kill Line overhead benchmark. Run as root on an idle machine:
 #   bench/bench.sh [N_OPEN] [N_EXEC]
 # Reports per-operation latency for: no monitor; a bystander process while
-# KillLine monitors something else; and the monitored process itself.
+# Kill Line monitors something else; and the monitored process itself.
 # Also reports monitor CPU time, peak RSS, events recorded and drops.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -24,7 +24,7 @@ cpu_of() { awk '{print ($14+$15)/100}' "/proc/$1/stat"; }
 
 echo "== baseline (no monitor)"; run; run
 
-echo "== bystander (KillLine monitoring an idle 'sleep', workload not monitored)"
+echo "== bystander (Kill Line monitoring an idle 'sleep', workload not monitored)"
 sleep 300 & SLEEPER=$!
 "$KL" --no-color monitor --pid "$SLEEPER" --policy "$POL" >/dev/null 2>&1 & MON=$!
 sleep 2; run; kill -INT $MON; wait $MON || true; kill $SLEEPER || true

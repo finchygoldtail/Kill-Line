@@ -206,7 +206,7 @@ pub fn run(opts: Options) -> Result<i32> {
         "monitor.started",
         Severity::Info,
         format!(
-            "KillLine monitoring started for {} with policy {}. Tracking {} process(es).",
+            "Kill Line monitoring started for {} with policy {}. Tracking {} process(es).",
             target_label,
             policy.display_name(),
             scope.pids.len()
@@ -218,7 +218,7 @@ pub fn run(opts: Options) -> Result<i32> {
         use std::io::Write;
         let _ = writeln!(
             std::io::stdout(),
-            "Fail-closed: the agent will be {} if KillLine loses visibility (dropped events).\n",
+            "Fail-closed: the agent will be {} if Kill Line loses visibility (dropped events).\n",
             if policy.response.on_degraded == ResponseAction::Freeze {
                 "frozen"
             } else {
@@ -487,7 +487,7 @@ pub fn run(opts: Options) -> Result<i32> {
         Category::Monitor,
         "monitor.stopped",
         Severity::Info,
-        format!("KillLine monitoring stopped: {}.", exit_reason),
+        format!("Kill Line monitoring stopped: {}.", exit_reason),
     );
     session.apply(&ev);
     store.append(&ev)?;

@@ -2,7 +2,7 @@
 
 **Question.** What is the simplest reliable way for a separate, privileged process on a Linux host to see what an AI agent does? That means process creation, files, network, DNS, privilege changes, namespaces and container-escape signals. The agent must not be able to switch the monitoring off, and the monitor must not depend on the agent or its sandbox reporting honestly.
 
-**Answer for V1.** Use one small eBPF program attached to **syscall tracepoints** and scheduler tracepoints. Scope it to the agent **inside the kernel**, by PID tree or container PID namespace. Pair each important syscall with its **return value**, so KillLine can tell "the sandbox refused it" apart from "it succeeded". Add an optional LSM-adjacent hook (`fentry/security_file_open`) for paths the kernel has already resolved. Everything else in this document is a trade-off that was considered and either rejected or deferred.
+**Answer for V1.** Use one small eBPF program attached to **syscall tracepoints** and scheduler tracepoints. Scope it to the agent **inside the kernel**, by PID tree or container PID namespace. Pair each important syscall with its **return value**, so Kill Line can tell "the sandbox refused it" apart from "it succeeded". Add an optional LSM-adjacent hook (`fentry/security_file_open`) for paths the kernel has already resolved. Everything else in this document is a trade-off that was considered and either rejected or deferred.
 
 This was validated on the development machine: a Linux 6.18 Firecracker VM with Docker 29.3, cgroup v1 (hybrid), and kernel BTF. See [Environment findings](#environment-findings) for what did and did not work there. That list is itself an argument for the design choices below.
 
@@ -22,7 +22,7 @@ This was validated on the development machine: a Linux 6.18 Firecracker VM with 
 | `inotify` | Changes under watched directories | Yes | Low | By directory; no PID attribution | **Rejected.** No attribution to a process, so it can't answer "who" |
 | procfs polling (`/proc/<pid>/fd`, `/proc/net/tcp`) | Snapshots | Yes | Cheap per poll, but misses anything short-lived | By PID | **Used only for enrichment** (cwd, fd paths, exe hashes, namespace seeding). Never used for detection |
 | nftables/iptables `LOG`/`NFLOG` in the agent's netns | Packets that reach netfilter | Yes | Low | Per network namespace | **Rejected for detection.** With `--network none`, `connect()` fails with `ENETUNREACH` *before* netfilter, so the attempt is invisible. Good for enforcement later |
-| Container runtime events (`docker events`, containerd) | Lifecycle only | Partly: the runtime is part of the thing being verified | None | Yes | **Used only for lifecycle** (`docker inspect` for PID and namespace). The runtime's own view is exactly the "sandbox says it is secure" signal KillLine is meant not to trust |
+| Container runtime events (`docker events`, containerd) | Lifecycle only | Partly: the runtime is part of the thing being verified | None | Yes | **Used only for lifecycle** (`docker inspect` for PID and namespace). The runtime's own view is exactly the "sandbox says it is secure" signal Kill Line is meant not to trust |
 | cgroups (`cgroup.procs`, `bpf_get_current_cgroup_id`) | Membership | Yes | None | By cgroup | **Deferred.** Excellent on cgroup v2 hosts. The dev VM is cgroup v1 hybrid, where the v2 cgroup ID of every process is the root, so it cannot scope. See §3 |
 
 ### Why not wrap Falco, Tetragon or Tracee?
@@ -44,7 +44,7 @@ We will revisit this decision if maintaining our own eBPF program across kernels
 
 ## 2. Coverage by requirement
 
-| Requirement | How KillLine V1 sees it | Notes / blind spots |
+| Requirement | How Kill Line V1 sees it | Notes / blind spots |
 |---|---|---|
 | Process creation, parent/child | `sys_enter_execve(at)` (path + first 6 argv, 42 bytes each), `sched_process_fork/exit`, `sys_exit_execve` for success | argv is truncated and redacted. Executable SHA-256 is computed from userspace via `/proc/<pid>/root`, so it is best effort for very short-lived processes |
 | Filesystem access | `sys_enter_open/openat/openat2/creat` + result, `unlink(at)/rmdir`, `rename(at)(2)`, `chmod/fchmodat/fchmod` | `read()`/`write()` on already-open fds, `mmap`, `io_uring` opens, `name_to_handle_at`/`open_by_handle_at`, `link`/`symlink` creation, `truncate`: **not yet hooked** (see LIMITATIONS) |
@@ -107,7 +107,7 @@ It also removes a class of false positives. Python tries to write `__pycache__/*
 
 Policies may list domains (`network.allow: [github.com]`). Connections, however, are to IPs. Options:
 
-1. **Resolve allowed domains in the monitor.** Rejected: KillLine would make its own network requests, violating "no unnecessary network access". It would also disagree with the agent's resolver (CDNs, split-horizon DNS, rebinding).
+1. **Resolve allowed domains in the monitor.** Rejected: Kill Line would make its own network requests, violating "no unnecessary network access". It would also disagree with the agent's resolver (CDNs, split-horizon DNS, rebinding).
 2. **Observe DNS answers** (hook `recvfrom/recvmsg` on port-53 sockets and parse A/AAAA records). This is correct, and planned. It is not in V1.
 3. **V1: attribution window.** A DNS *query* for an allowed domain is allowed and remembered. A connection to an IP not in `allow_cidr` within 300 s of such a query is **allowed but labelled "destination not verified"**. A connection with no preceding allowed query is a violation.
 
@@ -146,7 +146,7 @@ Observed on the development VM (Linux 6.18.44, Firecracker, Docker 29.3.1, cgrou
 | Finding | Consequence |
 |---|---|
 | Syscall and sched tracepoints attach fine; kernel BTF present | Primary design works |
-| `fentry/security_file_open` load → **EPERM** (even an empty fentry program) | KillLine reports the coverage gap at startup and falls back to the userspace symlink resolver. This is the "tell the user when a kernel feature is unavailable" requirement working as intended |
+| `fentry/security_file_open` load → **EPERM** (even an empty fentry program) | Kill Line reports the coverage gap at startup and falls back to the userspace symlink resolver. This is the "tell the user when a kernel feature is unavailable" requirement working as intended |
 | `sys_enter_init_module` / `finit_module` **do not exist** (`CONFIG_MODULES` off) | Reported as a coverage gap (non-critical, since modules cannot be loaded anyway) |
 | Tracepoint context size is per-syscall: reading `args[1]` in `sys_enter_setuid` is rejected by the verifier (`EACCES`) | Handlers are arity-specific |
 | cgroup v1 hybrid: every process's v2 cgroup ID is the root | cgroup-based scoping unusable here → PID namespace scoping |

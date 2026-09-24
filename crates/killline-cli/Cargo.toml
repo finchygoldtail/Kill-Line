@@ -1,6 +1,6 @@
 [package]
 name = "killline-cli"
-description = "KillLine command-line interface"
+description = "Kill Line command-line interface"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

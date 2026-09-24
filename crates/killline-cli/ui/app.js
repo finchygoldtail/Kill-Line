@@ -1,4 +1,4 @@
-// KillLine dashboard. Plain JS, no dependencies, works offline.
+// Kill Line dashboard. Plain JS, no dependencies, works offline.
 // Agent-controlled strings (paths, process names, argv) are only ever
 // inserted as text, never as HTML.
 "use strict";
@@ -121,7 +121,7 @@ async function loadSessions() {
   for (const s of sessions) {
     const prev = knownViolations.get(s.session_id);
     if (prev !== undefined && s.violations > prev && s.last_violation) {
-      toast(`KillLine triggered: ${s.agent} — ${s.last_violation.boundary}`);
+      toast(`Kill Line triggered: ${s.agent} — ${s.last_violation.boundary}`);
     }
     knownViolations.set(s.session_id, s.violations);
   }
@@ -315,7 +315,7 @@ async function openIncident(id) {
   body.replaceChildren(
     h("div", { class: "breach" },
       h("div", { class: "breach-head" },
-        h("span", { class: "breach-title" }, "KILLLINE TRIGGERED"),
+        h("span", { class: "breach-title" }, "KILL LINE TRIGGERED"),
         h("span", { class: "breach-time mono" }, dateTimeOf(inc.trigger.timestamp))),
       h("div", { class: "breach-grid" },
         h("div", {}, h("span", {}, "Boundary"), h("b", {}, inc.boundary)),
@@ -418,7 +418,7 @@ async function openStart() {
     const sel = $("container");
     if (c.available && c.containers.length) {
       sel.replaceChildren(...c.containers.map((x) => h("option", { value: x.name }, `${x.name}  —  ${x.image}  (${x.status})`)));
-      $("container-hint").textContent = "KillLine watches every process in this container, including ones started later with docker exec.";
+      $("container-hint").textContent = "Kill Line watches every process in this container, including ones started later with docker exec.";
     } else {
       sel.replaceChildren(h("option", { value: "" }, c.available ? "No running containers" : "Docker is not available"));
       $("container-hint").textContent = c.available ? "Start your agent's container first, or watch a process instead." : "Watch a process instead, or install and start Docker.";

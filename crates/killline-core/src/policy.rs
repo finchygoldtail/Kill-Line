@@ -72,7 +72,7 @@ pub struct FilesystemPolicy {
     #[serde(default)]
     pub deny: Vec<String>,
     /// Read-only paths every Linux program needs (shared libraries, locale,
-    /// /proc/self, ...). `default` enables KillLine's built-in list,
+    /// /proc/self, ...). `default` enables Kill Line's built-in list,
     /// `none` disables it so every read must be explicitly allowed.
     #[serde(default)]
     pub runtime_read: RuntimeRead,
@@ -220,7 +220,7 @@ pub enum ResponseAction {
 pub struct ResponsePolicy {
     #[serde(default)]
     pub violation: ResponseAction,
-    /// What to do when KillLine loses visibility (dropped events). `freeze`
+    /// What to do when Kill Line loses visibility (dropped events). `freeze`
     /// makes monitoring fail closed: an agent cannot flood its way out of
     /// view. Default: alert.
     #[serde(default)]
@@ -483,12 +483,12 @@ impl Policy {
         if text.len() as u64 > MAX_POLICY_BYTES {
             bail!("policy is larger than {} bytes", MAX_POLICY_BYTES);
         }
-        let p: Policy = serde_yaml::from_str(text).context("policy is not valid KillLine YAML")?;
+        let p: Policy = serde_yaml::from_str(text).context("policy is not valid Kill Line YAML")?;
         Ok(p)
     }
 
     /// Structural and semantic validation. Errors make the policy unusable;
-    /// warnings describe things KillLine cannot fully verify.
+    /// warnings describe things Kill Line cannot fully verify.
     pub fn validate(&self) -> Vec<Diagnostic> {
         let mut d = Vec::new();
         if self.version != 1 {
@@ -566,7 +566,7 @@ impl Policy {
             d.push(Diagnostic::warning(
                 "domain allowlists are verified by observing DNS queries; connections to IPs \
                  not in allow_cidr are reported as AMBER 'unverified destination' rather than \
-                 RED, because KillLine V1 does not see DNS answers (see docs/LIMITATIONS.md)",
+                 RED, because Kill Line V1 does not see DNS answers (see docs/LIMITATIONS.md)",
             ));
         }
         if mode == NetworkMode::Allow {
@@ -597,7 +597,7 @@ impl Policy {
         }
         if self.mcp.is_some() {
             d.push(Diagnostic::warning(
-                "mcp: section is parsed but NOT verified in V1 (KillLine has no MCP telemetry source yet). \
+                "mcp: section is parsed but NOT verified in V1 (Kill Line has no MCP telemetry source yet). \
                  MCP servers launched as local processes still appear as process/file/network events.",
             ));
         }
@@ -611,7 +611,7 @@ impl Policy {
         }
         if self.response.violation != ResponseAction::Alert {
             d.push(Diagnostic::info(format!(
-                "response.violation is `{:?}`: KillLine will act on the agent after the event \
+                "response.violation is `{:?}`: Kill Line will act on the agent after the event \
                  (it does not prevent the triggering syscall)",
                 self.response.violation
             )));

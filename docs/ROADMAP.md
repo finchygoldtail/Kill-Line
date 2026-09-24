@@ -12,7 +12,7 @@ The first milestone was: **prove we can independently detect a simple AI-agent c
 
 ## Then: active verification (differentiator)
 
-6. **Canary probes (`killline attest`).** At session start, run harmless boundary probes inside the sandbox (IMDS connect, `docker.sock` connect, credential-path open, TEST-NET egress, write outside the workspace). Prove two things: that the **sandbox refuses them**, and that **KillLine sees them**. Output a signed attestation of the form "sandbox claim held for these boundaries at time T". We found no competitor doing this (see COMPETITIVE_LANDSCAPE.md).
+6. **Canary probes (`killline attest`).** At session start, run harmless boundary probes inside the sandbox (IMDS connect, `docker.sock` connect, credential-path open, TEST-NET egress, write outside the workspace). Prove two things: that the **sandbox refuses them**, and that **Kill Line sees them**. Output a signed attestation of the form "sandbox claim held for these boundaries at time T". We found no competitor doing this (see COMPETITIVE_LANDSCAPE.md).
 7. **Signed evidence.** Sign the timeline head hash and incident checksums with a local key. Add optional anchoring to an append-only transparency log (still local by default).
 
 ## Phase 3: optional enforcement
@@ -28,7 +28,7 @@ The first milestone was: **prove we can independently detect a simple AI-agent c
 
 ## MCP
 
-13. An optional local **MCP observer** (stdio/HTTP proxy). It records servers, exposed tools, invoked tools, redacted arguments and response metadata, and enforces `mcp.allow_servers` / `deny_unknown_servers`. It will be correlated with OS events from the MCP server processes (which KillLine already sees as descendants).
+13. An optional local **MCP observer** (stdio/HTTP proxy). It records servers, exposed tools, invoked tools, redacted arguments and response metadata, and enforces `mcp.allow_servers` / `deny_unknown_servers`. It will be correlated with OS events from the MCP server processes (which Kill Line already sees as descendants).
 
 ## Platform
 

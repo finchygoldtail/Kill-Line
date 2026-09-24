@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>KillLine</title>
+<title>Kill Line</title>
 <link rel="stylesheet" href="/app.css">
 <script src="/app.js" defer></script>
 </head>
 <body>
 <header class="topbar">
-  <div class="brand" aria-label="KillLine">
+  <div class="brand" aria-label="Kill Line">
     <span class="signal" aria-hidden="true"><span class="beam"></span></span>
-    <span class="wordmark">KILL<b>LINE</b></span>
+    <span class="wordmark">KILL <b>LINE</b></span>
     <span class="tag">Independent containment verification</span>
   </div>
   <div class="host" id="host">…</div>
@@ -31,7 +31,7 @@
   <main id="main">
     <section id="welcome" class="welcome" hidden>
       <h1>Nothing is being watched yet</h1>
-      <p>KillLine checks an AI agent from outside its sandbox. Pick a running container or process, choose a containment policy, and KillLine reports every attempt to cross it.</p>
+      <p>Kill Line checks an AI agent from outside its sandbox. Pick a running container or process, choose a containment policy, and Kill Line reports every attempt to cross it.</p>
       <button class="btn primary" type="button" id="btn-start-2">Start monitoring</button>
     </section>
 
@@ -78,7 +78,7 @@
 
       <div class="breach" id="breach" hidden>
         <div class="breach-head">
-          <span class="breach-title">KILLLINE TRIGGERED</span>
+          <span class="breach-title">KILL LINE TRIGGERED</span>
           <span class="breach-latest">Latest breach</span>
           <span class="breach-time mono" id="br-time"></span>
         </div>
@@ -123,7 +123,7 @@
       </section>
 
       <section class="tabpanel" id="tab-coverage" hidden>
-        <p class="muted">What KillLine can see on this machine. Missing sources are reported, never hidden.</p>
+        <p class="muted">What Kill Line can see on this machine. Missing sources are reported, never hidden.</p>
         <ul class="coverage" id="coverage"></ul>
       </section>
     </section>

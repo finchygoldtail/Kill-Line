@@ -103,7 +103,7 @@ impl PendingIncident {
             events_after_trigger: 0,
             timeline_head_hash: head.to_string(),
             notes: vec![
-                "KillLine observes system calls from outside the agent. It reports what it saw, not intent.".into(),
+                "Kill Line observes system calls from outside the agent. It reports what it saw, not intent.".into(),
                 "Correlations are possible links, not proof of causation.".into(),
                 "File contents are never captured. Command-line arguments are redacted by default.".into(),
                 "timeline_head_hash anchors this bundle to the session's hash-chained timeline.".into(),

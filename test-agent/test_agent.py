@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-KillLine test agent -- a deliberately HARMLESS stand-in for an AI agent.
+Kill Line test agent -- a deliberately HARMLESS stand-in for an AI agent.
 
-It performs simple, safe actions so KillLine's detection can be validated.
+It performs simple, safe actions so Kill Line's detection can be validated.
 It never exploits anything, never reads real secrets and never sends data:
 
   * network attempts target 203.0.113.42 (RFC 5737 TEST-NET-3, reserved for

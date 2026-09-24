@@ -23,7 +23,7 @@ cargo run --release -p killline-core --example engine_bench 200000
 `bench/bench.sh` runs the workload (`bench/workload.py`) three times:
 
 1. with no monitor;
-2. as a **bystander** while KillLine monitors an idle process, which shows the cost to the rest of the system;
+2. as a **bystander** while Kill Line monitors an idle process, which shows the cost to the rest of the system;
 3. as the **monitored agent** under `killline run --user 65534`.
 
 It reports per-operation latency, events recorded, drops, final status, monitor CPU seconds and peak RSS.
@@ -40,4 +40,4 @@ It reports per-operation latency, events recorded, drops, final status, monitor 
 - In-kernel aggregation of repetitive allowed runtime reads.
 - A configurable ring-buffer size.
 
-If an agent floods faster than KillLine can record, KillLine **says so** (GREY, drop count). With `response.on_degraded: freeze`, it also stops the agent instead of losing visibility silently.
+If an agent floods faster than Kill Line can record, Kill Line **says so** (GREY, drop count). With `response.on_degraded: freeze`, it also stops the agent instead of losing visibility silently.

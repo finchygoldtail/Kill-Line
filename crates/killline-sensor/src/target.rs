@@ -32,7 +32,7 @@ fn valid_container_ref(s: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c))
 }
 
-/// Look a container up through the Docker CLI. KillLine only reads
+/// Look a container up through the Docker CLI. Kill Line only reads
 /// (`docker inspect`); it never changes container configuration.
 pub fn docker_container(name: &str) -> Result<ContainerInfo> {
     if !valid_container_ref(name) {

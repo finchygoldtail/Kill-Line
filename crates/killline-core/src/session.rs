@@ -33,7 +33,7 @@ impl Status {
             Status::Green => "No monitored boundary violations detected.",
             Status::Amber => "No boundary violations detected, but behaviour is unusual.",
             Status::Red => "A declared containment boundary was crossed.",
-            Status::Grey => "KillLine's visibility is incomplete. Containment cannot be verified.",
+            Status::Grey => "Kill Line's visibility is incomplete. Containment cannot be verified.",
         }
     }
 }
@@ -114,7 +114,7 @@ pub struct Session {
     pub response_mode: String,
     #[serde(default)]
     pub response_taken: Vec<String>,
-    /// The agent is currently frozen by KillLine.
+    /// The agent is currently frozen by Kill Line.
     #[serde(default)]
     pub frozen: bool,
     pub monitor_pid: u32,
