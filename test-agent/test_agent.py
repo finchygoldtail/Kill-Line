@@ -41,8 +41,11 @@ def log(msg):
 
 
 def ensure_workspace():
-    os.makedirs(os.path.join(WORKSPACE, "src"), exist_ok=True)
-    os.makedirs(os.path.join(WORKSPACE, "output"), exist_ok=True)
+    # Only create what is missing: on Windows even makedirs(exist_ok=True)
+    # is a real create attempt on the existing folder.
+    for d in (os.path.join(WORKSPACE, "src"), os.path.join(WORKSPACE, "output")):
+        if not os.path.isdir(d):
+            os.makedirs(d, exist_ok=True)
     task = os.path.join(WORKSPACE, "task.md")
     if not os.path.exists(task):
         # Workspace seeding is only needed outside the lab; in the lab the

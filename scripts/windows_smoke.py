@@ -50,6 +50,8 @@ with open(os.path.join(secrets, "api-key.txt"), "w") as f:
     f.write("FAKE-KEY-NOT-REAL\n")
 
 py_home = os.path.dirname(sys.executable)
+# Python probes its install's parent folders (pyvenv.cfg, Modules\Setup.local).
+py_root = os.path.dirname(os.path.dirname(sys.base_prefix))
 policy = f"""
 agent: test-agent
 name: windows-smoke
@@ -59,6 +61,7 @@ filesystem:
     - {os.path.dirname(AGENT)}
     - {sys.base_prefix}
     - {py_home}
+    - {py_root}
   allow_write:
     - {work}\\output
     - ~/AppData/Local/Temp
@@ -109,8 +112,9 @@ def run(modes):
     other = [l for l in p.stderr.splitlines() if not l.startswith("[etw-probe]")]
     if other:
         print("stderr:", "\n".join(other[-40:]))
-    print(f"--- {len(probe)} probe lines (showing up to 80):")
-    for l in probe[:80]:
+    interesting = [l for l in probe if any(k in l.lower() for k in ("pipe", "docker", "network", "dns", "process"))]
+    print(f"--- {len(probe)} probe lines; {len(interesting)} about pipes/network/dns/processes:")
+    for l in interesting[:120]:
         print(l)
     print(f"exit={p.returncode} in {time.time() - t0:.1f}s", flush=True)
     tl = subprocess.run([KL, "--no-color", "timeline", "--json"], env=env, capture_output=True, text=True,

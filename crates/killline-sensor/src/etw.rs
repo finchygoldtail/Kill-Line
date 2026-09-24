@@ -413,6 +413,27 @@ impl Shared {
     }
 }
 
+/// Full Win32 image path of a running (or suspended) process.
+fn process_image(pid: u32) -> Option<String> {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    // SAFETY: handle checked and closed; buffer length passed in/out.
+    unsafe {
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if h.is_null() {
+            return None;
+        }
+        let mut buf = [0u16; 1024];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, buf.as_mut_ptr(), &mut len);
+        CloseHandle(h);
+        (ok != 0).then(|| String::from_utf16_lossy(&buf[..len as usize]))
+    }
+}
+
 /// `\Device\HarddiskVolume3\x\y.exe` → `C:\x\y.exe` for hashing.
 fn image_to_win32(image: &str, devices: &[(String, String)]) -> Option<String> {
     let lower = image.to_lowercase();
@@ -553,6 +574,44 @@ impl Sensor {
             CoverageItem { name: "etw/Microsoft-Windows-DNS-Client".into(), active: true, critical: false, detail: Some("DNS query names".into()) },
             CoverageItem { name: "privilege and namespace syscalls".into(), active: false, critical: false, detail: Some("not observed on Windows (V1): token changes, service creation and driver loads are only seen as program executions".into()) },
         ];
+
+        // Processes already running when monitoring starts (for example the
+        // suspended agent in `killline run`) never produce a start event.
+        // Record their executable so the timeline and rules see them.
+        let now = Utc::now();
+        for &pid in scope.pids.iter().filter(|p| **p != me) {
+            let Some(image) = process_image(pid) else {
+                continue;
+            };
+            let path = canonical_windows(&image);
+            let comm = path.rsplit('/').next().unwrap_or("").to_string();
+            let ppid = {
+                let mut names = shared.names.lock().unwrap();
+                let ppid = names.get(&pid).map(|(pp, _)| *pp).unwrap_or(0);
+                names.insert(pid, (ppid, comm.clone()));
+                ppid
+            };
+            let info = ProcessInfo {
+                pid,
+                tid: 0,
+                ppid,
+                uid: 0,
+                gid: 0,
+                comm: comm.clone(),
+                exe: Some(path.clone()),
+            };
+            shared.emit(
+                now,
+                info,
+                ObsKind::Exec {
+                    path,
+                    argv: vec![comm],
+                    sha256: hash_file(&image),
+                    exists: true,
+                },
+            );
+        }
+
         Ok(Sensor {
             rx,
             shared,
