@@ -2,10 +2,20 @@
 
 ## Unreleased
 
+## 0.1.1 (2026-09-25)
+
 ### Added
 - Dashboard: the Start monitoring dialog opens on "A process" when Docker is missing or no container is running, and explains how to find a process ID.
 - `docs/WINDOWS.md`: installing and running Kill Line on Windows.
 - Policy files saved as UTF-16 or with a UTF-8 byte-order mark (Windows PowerShell's defaults) now load.
+
+### Changed
+- Dependencies: `aya` 0.14 (eBPF loader, checked live), `sha2` 0.11, `windows-sys` 0.61; GitHub Actions `checkout` v7, `upload-artifact` v7, `download-artifact` v8, `attest-build-provenance` v4, `action-gh-release` v3.
+- Release workflow: a manual run with a `tag` input creates the tag and a draft release.
+
+## 0.1.0 (2026-09-25)
+
+### Added
 - **Licence**: Apache-2.0 (`LICENSE`, `NOTICE`); the in-kernel eBPF program in `bpf/` stays GPL-2.0 (`bpf/LICENSE`).
 - **Windows version**: an ETW sensor (Kernel-Process, Kernel-File, Kernel-Network, DNS-Client) that reports ETW event loss and session loss. Windows-aware policies cover credential stores, Docker named pipes, raw disks and privilege tools, with case-insensitive paths and Windows templates. `killline run` starts the agent suspended until tracking begins. Freeze, resume and terminate use NtSuspendProcess, NtResumeProcess and TerminateProcess. The desktop app requests administrator rights through UAC and ships NSIS and MSI installers. CI runs a real ETW smoke test on Windows. Known Windows gaps (named-pipe opens such as the Docker Engine pipe, command lines, open results) are listed in docs/LIMITATIONS.md.
 - **Release pipeline with signing**: SHA256SUMS, Sigstore keyless signatures and GitHub build-provenance attestations, Authenticode for Windows binaries, installers and scripts, and GPG for Linux files. Certificate and key are optional secrets. See docs/SIGNING.md.
@@ -18,7 +28,7 @@
 - Operator control channel (`control.json`) and `resume` response; sessions record whether the agent is frozen.
 - Terminal demo recording (`docs/demo/killline-demo.cast`) and `test-lab/narrated-demo.sh`.
 
-## 0.1.0: first vertical slice (2026-09-24)
+## First vertical slice (2026-09-24, before 0.1.0)
 
 Milestone: *independently detect a simple AI-agent containment boundary crossing in real time and reconstruct exactly what happened.*
 

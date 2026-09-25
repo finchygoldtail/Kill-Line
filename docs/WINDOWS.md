@@ -21,7 +21,7 @@ Until releases are Authenticode-signed, Windows SmartScreen shows "Windows prote
 In PowerShell, in your Downloads folder:
 
 ```powershell
-Get-FileHash .\Kill-Line_0.1.0_x64-setup.exe -Algorithm SHA256
+Get-FileHash .\Kill-Line_0.1.1_x64-setup.exe -Algorithm SHA256
 ```
 
 Compare the result with the line for that file in `SHA256SUMS` on the release page. [SIGNING.md](SIGNING.md) covers signature checks with `cosign` and `gh attestation verify`.

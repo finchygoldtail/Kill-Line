@@ -5,7 +5,7 @@ members = ["crates/killline-core", "crates/killline-sensor", "crates/killline-cl
 exclude = ["desktop"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 rust-version = "1.80"
 license = "Apache-2.0"

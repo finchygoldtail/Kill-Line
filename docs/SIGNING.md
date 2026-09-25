@@ -36,8 +36,8 @@ gpg --import KEYS.asc && gpg --verify SHA256SUMS.asc SHA256SUMS
 On Windows (PowerShell):
 
 ```powershell
-Get-AuthenticodeSignature .\Kill-Line_0.1.0_x64-setup.exe | Format-List Status, SignerCertificate
-Get-FileHash .\Kill-Line_0.1.0_x64-setup.exe -Algorithm SHA256   # compare with SHA256SUMS
+Get-AuthenticodeSignature .\Kill-Line_0.1.1_x64-setup.exe | Format-List Status, SignerCertificate
+Get-FileHash .\Kill-Line_0.1.1_x64-setup.exe -Algorithm SHA256   # compare with SHA256SUMS
 ```
 
 ## Maintainer set-up
