@@ -1,0 +1,23 @@
+title: "[Policy] "
+labels: ["policy"]
+body:
+  - type: markdown
+    attributes:
+      value: Share a containment policy that works for an agent or framework. Remove anything sensitive first.
+  - type: input
+    id: agent
+    attributes:
+      label: Agent / framework
+    validations:
+      required: true
+  - type: textarea
+    id: policy
+    attributes:
+      label: Policy
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes (false positives you tuned out, platform, etc.)

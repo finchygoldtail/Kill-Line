@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The bundled start screen may call start_backend. The dashboard itself (served by the Kill Line backend on 127.0.0.1) gets no access to Tauri APIs.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

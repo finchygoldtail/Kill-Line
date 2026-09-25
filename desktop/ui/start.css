@@ -1,0 +1,32 @@
+:root {
+  color-scheme: dark;
+  --bg: #07090b; --surface: #0e1216; --line: #232b32; --ink: #e6ebef; --muted: #8a96a0;
+  --gold: #e8c547; --gold-ink: #121008; --red: #ff4d4d;
+  --sans: "Segoe UI", "Helvetica Neue", Roboto, "Noto Sans", system-ui, sans-serif;
+  --cond: "Roboto Condensed", "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: radial-gradient(ellipse at 50% 20%, #10161b 0, var(--bg) 60%); color: var(--ink); font: 15px/1.55 var(--sans); }
+[hidden] { display: none !important; }
+.start { min-height: 100%; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 32px 16px; text-align: center; }
+.signal {
+  position: relative; width: 84px; height: 84px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, #fff6c9 0, var(--gold) 45%, #7a6420 100%);
+  box-shadow: 0 0 60px rgba(232, 197, 71, 0.35);
+}
+.signal .beam { position: absolute; left: 10px; right: 10px; top: 37px; height: 10px; background: var(--bg); border-radius: 5px; }
+.wordmark { margin: 10px 0 0; font: 700 40px/1 var(--cond); letter-spacing: 0.2em; }
+.wordmark b { color: var(--gold); }
+.tag { margin: 0 0 18px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; }
+.card { width: min(520px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; display: grid; gap: 10px; justify-items: center; }
+.card p { margin: 0; max-width: 56ch; }
+.card h2 { margin: 0; font: 700 20px/1.2 var(--cond); letter-spacing: 0.05em; color: var(--red); }
+.card.bad { border-color: rgba(255, 77, 77, 0.45); }
+.muted { color: var(--muted); font-size: 13.5px; }
+.btn { appearance: none; cursor: pointer; margin-top: 6px; padding: 10px 20px; border-radius: 6px; border: 1px solid var(--gold); background: var(--gold); color: var(--gold-ink); font: 700 14px/1 var(--sans); letter-spacing: 0.03em; }
+.btn:hover { background: #f3d467; }
+.btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--gold); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }

@@ -1,0 +1,33 @@
+name: Bug report
+description: Something in Kill Line is broken (crash, wrong output, dashboard or installer problem).
+labels: ["bug", "triage"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Engine / CLI, Dashboard (killline ui), Desktop app, Installer, Docs, Other]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version and OS
+      placeholder: "killline 0.1.0 on Ubuntu 24.04 / Windows 11 23H2"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (redacted)
+      render: text

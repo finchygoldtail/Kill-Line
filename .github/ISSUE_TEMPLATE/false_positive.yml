@@ -1,0 +1,44 @@
+name: False positive
+description: Kill Line reported a violation for something the agent was allowed to do.
+title: "False positive: "
+labels: ["false-positive", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! False-positive reports make Kill Line usable. Please **remove anything sensitive**
+        (usernames, hostnames, internal paths, tokens) from what you paste.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Linux (eBPF), Windows (ETW)]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Kill Line version
+      placeholder: "killline --version"
+    validations:
+      required: true
+  - type: textarea
+    id: event
+    attributes:
+      label: The event
+      description: Paste the alert block, or the raw event from `killline inspect <incident> --raw`.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: policy
+    attributes:
+      label: Your policy (redacted)
+      render: yaml
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this should be allowed
+      description: What the agent was doing, and which rule should have allowed it.
+    validations:
+      required: true

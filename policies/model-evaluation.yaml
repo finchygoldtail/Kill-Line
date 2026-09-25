@@ -1,0 +1,29 @@
+# MODEL EVALUATION: restricted workspace, no network, no cloud credentials,
+# no host access.
+version: 1
+agent: model-eval
+name: model-evaluation
+filesystem:
+  allow_read:
+    - /workspace
+    - /models
+  allow_write:
+    - /workspace/results
+    - /tmp
+  deny:
+    - /root
+    - /home
+    - /var/run/secrets
+network:
+  mode: deny
+processes:
+  allow: [python3, python]
+  deny_privileged: true
+credentials:
+  access: deny
+cloud_metadata:
+  access: deny
+container_runtime:
+  access: deny
+response:
+  violation: alert

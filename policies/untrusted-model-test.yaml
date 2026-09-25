@@ -1,0 +1,35 @@
+# UNTRUSTED MODEL TEST: extremely restrictive. Nothing outside /workspace,
+# not even the default runtime-read allowance beyond what is listed.
+version: 1
+agent: untrusted-model
+name: untrusted-model-test
+filesystem:
+  allow_read:
+    - /workspace/input
+    - /usr/lib
+    - /usr/local/lib
+    - /lib
+    - /lib64
+    - /etc/ld.so.cache
+    - /proc/self
+    - /dev/null
+    - /dev/urandom
+  allow_write:
+    - /workspace/output
+  runtime_read: none
+network:
+  mode: deny
+processes:
+  allow: [python3]
+  deny_privileged: true
+credentials:
+  access: deny
+cloud_metadata:
+  access: deny
+container_runtime:
+  access: deny
+anomaly:
+  file_burst_threshold: 50
+  window_secs: 10
+response:
+  violation: freeze

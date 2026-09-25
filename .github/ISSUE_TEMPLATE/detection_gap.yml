@@ -1,0 +1,35 @@
+name: Detection gap
+description: An agent crossed a boundary and Kill Line did not report it (already-documented or non-exploitable gaps only).
+title: "Detection gap: "
+labels: ["detection-gap", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **If this could let a malicious agent evade Kill Line and it is not already in
+        docs/LIMITATIONS.md, report it privately instead:** Security → Report a vulnerability.
+        Describe safe simulations only; do not post exploit code.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Linux (eBPF), Windows (ETW)]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What the agent did (the syscall or API, if you know it), and what Kill Line showed.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Safe reproduction
+      description: A harmless way to reproduce it, for example a new test-agent mode.
+  - type: textarea
+    id: coverage
+    attributes:
+      label: Sensor coverage
+      description: Paste the coverage lines Kill Line printed at start-up.

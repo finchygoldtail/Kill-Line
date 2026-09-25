@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kill Line</title>
+<link rel="stylesheet" href="start.css">
+<script src="start.js" defer></script>
+</head>
+<body>
+<main class="start">
+  <div class="signal" aria-hidden="true"><span class="beam"></span></div>
+  <h1 class="wordmark">KILL <b>LINE</b></h1>
+  <p class="tag">Independent containment verification for AI agents</p>
+
+  <section id="idle" class="card">
+    <p>Kill Line watches AI agents from outside their sandbox. To see what they do at the operating-system level, it needs administrator permission.</p>
+    <p class="muted">Your system may ask you to confirm. Nothing leaves this computer: no account, no cloud, no telemetry.</p>
+    <button id="go" class="btn primary" type="button">Start Kill Line</button>
+  </section>
+
+  <section id="busy" class="card" hidden>
+    <div class="spinner" aria-hidden="true"></div>
+    <p id="busy-text">Starting the Kill Line engine…</p>
+    <p class="muted">Confirm in the system prompt if one appears.</p>
+  </section>
+
+  <section id="failed" class="card bad" hidden>
+    <h2>Kill Line could not start</h2>
+    <p id="error"></p>
+    <button id="retry" class="btn primary" type="button">Try again</button>
+  </section>
+</main>
+</body>
+</html>

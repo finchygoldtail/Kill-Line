@@ -1,0 +1,35 @@
+# Windows CODING AGENT: one project folder, package registries and GitHub.
+version: 1
+agent: coding-agent
+name: windows-coding-agent
+filesystem:
+  allow:
+    - C:\src\project
+  allow_write:
+    - ~/AppData/Local/Temp
+    - ~/AppData/Local/npm-cache
+    - ~/AppData/Local/pip/cache
+  allow_read:
+    - ~/.gitconfig
+network:
+  mode: allowlist
+  allow:
+    - github.com
+    - "*.github.com"
+    - "*.githubusercontent.com"
+    - registry.npmjs.org
+    - pypi.org
+    - files.pythonhosted.org
+  allow_localhost: true
+processes:
+  allow: [git, node, npm, npx, python, pip, cargo, rustc, cmd, conhost]
+  deny: [powershell, pwsh, curl, certutil, bitsadmin, mshta, rundll32, regsvr32]
+  deny_privileged: true
+credentials:
+  access: deny
+cloud_metadata:
+  access: deny
+container_runtime:
+  access: deny
+response:
+  violation: alert

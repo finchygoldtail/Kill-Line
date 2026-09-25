@@ -1,0 +1,197 @@
+name: release
+
+# Builds, signs and publishes Kill Line.
+#
+# - Pushing a tag like v0.2.0 builds everything and creates a DRAFT release.
+# - Changing this workflow on a branch runs the same pipeline as a dry run
+#   (build + sign, no release) so signing can be tested safely.
+#
+# Signing (details and verification in docs/SIGNING.md):
+# - every file: Sigstore keyless signature (cosign) + GitHub build provenance
+#   attestation (public repositories), plus SHA256SUMS;
+# - Windows .exe/.msi and any .ps1: Authenticode, when the WINDOWS_CERTIFICATE
+#   and WINDOWS_CERTIFICATE_PASSWORD secrets are set;
+# - Linux files and SHA256SUMS: detached GPG signatures, when GPG_PRIVATE_KEY
+#   (and optionally GPG_PASSPHRASE) are set.
+
+on:
+  push:
+    tags: ["v*"]
+    branches: ["claude/**", "main"]
+    paths: [".github/workflows/release.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang libbpf-dev libwebkit2gtk-4.1-dev \
+            libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Tauri CLI and CycloneDX
+        run: cargo install tauri-cli --version "^2" --locked && cargo install cargo-cyclonedx --locked
+      - name: Build engine, .deb and AppImage
+        run: desktop/build.sh
+      - name: SBOM
+        run: cargo cyclonedx --format json
+      - name: Collect
+        run: |
+          mkdir -p dist
+          cp target/release/killline dist/killline-linux-x86_64
+          cp desktop/src-tauri/target/release/bundle/deb/*.deb dist/
+          cp desktop/src-tauri/target/release/bundle/appimage/*.AppImage dist/
+          for f in $(find crates -name '*.cdx.json'); do cp "$f" "dist/sbom-$(basename "$f")"; done
+          # Spaces in names are awkward for users and tools.
+          cd dist && for f in *\ *; do [ -e "$f" ] && mv "$f" "${f// /-}"; done; ls -la
+      - name: GPG-sign Linux files (optional)
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        if: env.GPG_PRIVATE_KEY != ''
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          for f in dist/*; do
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --armor --detach-sign "$f"
+          done
+          gpg --armor --export > dist/KEYS.asc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux
+          path: dist/
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+      - name: Import code-signing certificate (optional)
+        id: cert
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE) { Write-Host "No certificate secret: Windows files will not be Authenticode-signed."; exit 0 }
+          $path = Join-Path $env:RUNNER_TEMP "kill-line-signing.pfx"
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $pw = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $path -CertStoreLocation Cert:\CurrentUser\My -Password $pw
+          Remove-Item $path
+          "thumbprint=$($cert.Thumbprint)" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+      - name: Build and sign the engine
+        shell: pwsh
+        env:
+          THUMBPRINT: ${{ steps.cert.outputs.thumbprint }}
+        run: |
+          cargo build --release --locked -p killline-cli
+          if ($env:THUMBPRINT) {
+            $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+            & $signtool.FullName sign /sha1 $env:THUMBPRINT /fd sha256 /tr http://timestamp.digicert.com /td sha256 target\release\killline.exe
+            if ($LASTEXITCODE -ne 0) { throw "signtool failed" }
+          }
+      - name: Build (and sign) the desktop app and installers
+        shell: pwsh
+        env:
+          THUMBPRINT: ${{ steps.cert.outputs.thumbprint }}
+        run: |
+          $extra = @()
+          if ($env:THUMBPRINT) {
+            $cfg = Join-Path $env:RUNNER_TEMP "tauri-signing.json"
+            @{ bundle = @{ windows = @{ certificateThumbprint = $env:THUMBPRINT; digestAlgorithm = "sha256"; timestampUrl = "http://timestamp.digicert.com" } } } |
+              ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 $cfg
+            $extra = @("--config", $cfg)
+          }
+          # build.ps1 rebuilds the engine; the signed binary is reused because nothing changed.
+          & desktop\build.ps1 @extra
+      - name: Collect
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target\release\killline.exe dist\killline-windows-x86_64.exe
+          Get-ChildItem desktop\src-tauri\target\release\bundle -Recurse -Include *.exe,*.msi |
+            ForEach-Object { Copy-Item $_.FullName (Join-Path dist ($_.Name -replace ' ', '-')) }
+          Get-ChildItem dist
+      - name: Authenticode-sign shipped PowerShell scripts (optional)
+        shell: pwsh
+        env:
+          THUMBPRINT: ${{ steps.cert.outputs.thumbprint }}
+        run: |
+          $scripts = Get-ChildItem dist -Filter *.ps1 -ErrorAction SilentlyContinue
+          if (-not $scripts) { Write-Host "No PowerShell scripts shipped."; exit 0 }
+          if (-not $env:THUMBPRINT) { Write-Host "No certificate: scripts left unsigned."; exit 0 }
+          $cert = Get-Item "Cert:\CurrentUser\My\$($env:THUMBPRINT)"
+          foreach ($s in $scripts) { Set-AuthenticodeSignature -FilePath $s.FullName -Certificate $cert -TimestampServer http://timestamp.digicert.com -HashAlgorithm SHA256 }
+      - name: Show signature status
+        shell: pwsh
+        run: Get-ChildItem dist -Include *.exe,*.msi,*.ps1 -Recurse | Get-AuthenticodeSignature | Format-Table Status, StatusMessage, Path -AutoSize
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows
+          path: dist/
+
+  publish:
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write      # create the draft release
+      id-token: write      # Sigstore keyless signing / attestations
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum $(ls | grep -v -E '\.(asc|sigstore\.json)$') > SHA256SUMS
+          cat SHA256SUMS
+      - name: GPG-sign checksums (optional)
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        if: env.GPG_PRIVATE_KEY != ''
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --armor --detach-sign dist/SHA256SUMS
+      # Sigstore records signatures in its public transparency log, which
+      # would reveal a private repository's name; only sign publicly.
+      - uses: sigstore/cosign-installer@v3
+        if: ${{ !github.event.repository.private }}
+      - name: Sigstore keyless signatures
+        if: ${{ !github.event.repository.private }}
+        run: |
+          cd dist
+          for f in $(ls | grep -v -E '\.(asc|sigstore\.json)$'); do
+            cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
+          done
+      - name: Build provenance attestation
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/*"
+      - name: Draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: dist/*
+      - name: Keep dry-run output
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dry-run
+          path: dist/
