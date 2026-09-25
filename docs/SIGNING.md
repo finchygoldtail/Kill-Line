@@ -53,7 +53,7 @@ Add these under **Settings → Secrets and variables → Actions**. No secret is
 
 Ways to get a certificate:
 
-- **SignPath Foundation**: free code signing for qualifying open-source projects. Recommended once the licence is chosen. It signs through its own service rather than a `.pfx`, so the workflow's signing step would be swapped for their GitHub action.
+- **SignPath Foundation**: free code signing for qualifying open-source projects. Kill Line is Apache-2.0 (OSI-approved), so it qualifies to apply. It signs through its own service rather than a `.pfx`, so the workflow's signing step would be swapped for their GitHub action.
 - **Azure Trusted Signing**: low monthly cost, trusted by Windows SmartScreen, keyless in CI (Microsoft's signing action).
 - **An OV or EV certificate from a CA** (DigiCert, Sectigo, SSL.com, …). Since 2023 these keys must live in hardware or a cloud HSM, so a plain `.pfx` is only possible with some CAs' cloud options. Check with your CA.
 

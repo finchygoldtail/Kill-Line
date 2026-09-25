@@ -41,4 +41,4 @@ The first milestone was: **prove we can independently detect a simple AI-agent c
 
 18. Replace `serde_yaml` (archived) with a maintained or restricted parser; fuzz the policy and DNS parsers (`cargo fuzz`).
 19. Signed releases, SBOM per release, reproducible builds, packaged least-privilege capabilities.
-20. Licensing decision (the architecture keeps an open-source core possible: no proprietary services required).
+20. ~~Licensing decision~~ Done: Apache-2.0, with the eBPF program under GPL-2.0.

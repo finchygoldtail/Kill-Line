@@ -70,7 +70,7 @@ We also encourage **signed commits** (SSH or GPG): `git config commit.gpgsign tr
 
 ## Licensing
 
-A licence has not been chosen yet. By contributing, you agree that your contribution may be released under the licence the project adopts. That will be an OSI-approved licence, with the kernel-side eBPF code under a GPL-compatible one. If you can't agree to that, say so in your PR.
+Kill Line is licensed under the Apache License 2.0 (`LICENSE`); the kernel-side eBPF program in `bpf/` is GPL-2.0 (`bpf/LICENSE`). Under section 5 of the Apache License, contributions you submit are licensed under the same terms, and changes to `bpf/` under GPL-2.0. The DCO sign-off below certifies that you have the right to do so.
 
 ## Code of conduct
 

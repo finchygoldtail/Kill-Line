@@ -1,0 +1,11 @@
+Kill Line
+Copyright 2026 finchygoldtail and the Kill Line contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Exception: the in-kernel eBPF program in bpf/ (killline.bpf.c) is licensed
+under the GNU General Public License, version 2 (see bpf/LICENSE), because the
+Linux kernel only lets GPL-compatible BPF programs use its GPL-only helpers.
+bpf/vmlinux_min.h is available under GPL-2.0 OR BSD-2-Clause. The compiled
+BPF object is loaded into the kernel as a separate program; it is not linked
+into the Apache-2.0 userspace code.

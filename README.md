@@ -192,4 +192,6 @@ bench/                  overhead benchmark
 
 Kill Line is purely defensive. It contains no exploit code, no escape implementations, no credential-stealing or exfiltration logic, and no evasion or persistence techniques. All attack scenarios are safe simulations inside the local lab.
 
-No licence has been chosen yet. The architecture deliberately avoids dependence on proprietary or cloud infrastructure, so that the monitoring core could be open-sourced. One constraint to know: the in-kernel program (`bpf/`) must declare a GPL-compatible licence to use the kernel's GPL-only BPF helpers. It is marked `GPL-2.0` for that reason, as is common for eBPF components (Falco, Tetragon, Tracee). Userspace licensing is independent of this.
+## Licence
+
+Kill Line is licensed under the [Apache License 2.0](LICENSE). The one exception is the in-kernel eBPF program in [`bpf/`](bpf/), which is licensed under [GPL-2.0](bpf/LICENSE), because the kernel only lets GPL-compatible BPF programs use its GPL-only helpers. Falco, Tetragon and Tracee handle their eBPF code the same way. See [NOTICE](NOTICE).

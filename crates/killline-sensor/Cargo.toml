@@ -4,6 +4,7 @@ description = "Kill Line sensors: eBPF on Linux, ETW on Windows"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 publish.workspace = true
 build = "build.rs"
 

@@ -8,7 +8,7 @@ exclude = ["desktop"]
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.80"
-# Licensing decision intentionally deferred (see README). Not yet licensed for redistribution.
+license = "Apache-2.0"
 publish = false
 
 [workspace.dependencies]
