@@ -195,7 +195,7 @@ jobs:
           done
       - name: Build provenance attestation
         if: ${{ !github.event.repository.private }}
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: "dist/*"
       - name: Create the tag (manual runs)
