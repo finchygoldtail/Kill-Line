@@ -617,6 +617,43 @@ pub struct CompiledPolicy {
     pub network_mode: NetworkMode,
 }
 
+/// Read a policy file as text. Accepts UTF-8 (with or without a byte-order
+/// mark) and UTF-16 with a byte-order mark, which is what Windows PowerShell
+/// 5.1 writes for `killline template x > policy.yaml`.
+pub fn read_policy_text(path: &Path) -> Result<String> {
+    let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    decode_policy_bytes(&bytes).with_context(|| format!("reading {}", path.display()))
+}
+
+fn decode_policy_bytes(bytes: &[u8]) -> Result<String> {
+    let utf16 = |rest: &[u8], le: bool| -> Result<String> {
+        if rest.len() % 2 != 0 {
+            bail!("UTF-16 text with an odd number of bytes");
+        }
+        let units: Vec<u16> = rest
+            .chunks_exact(2)
+            .map(|c| {
+                if le {
+                    u16::from_le_bytes([c[0], c[1]])
+                } else {
+                    u16::from_be_bytes([c[0], c[1]])
+                }
+            })
+            .collect();
+        String::from_utf16(&units).map_err(|_| anyhow::anyhow!("invalid UTF-16 text"))
+    };
+    match bytes {
+        [0xEF, 0xBB, 0xBF, rest @ ..] => Ok(std::str::from_utf8(rest)
+            .context("policy is not valid UTF-8")?
+            .to_string()),
+        [0xFF, 0xFE, rest @ ..] => utf16(rest, true),
+        [0xFE, 0xFF, rest @ ..] => utf16(rest, false),
+        _ => Ok(std::str::from_utf8(bytes)
+            .context("policy is not valid UTF-8 (save it as UTF-8 or UTF-16)")?
+            .to_string()),
+    }
+}
+
 impl Policy {
     pub fn load(path: &Path) -> Result<Policy> {
         let meta =
@@ -627,9 +664,7 @@ impl Policy {
                 MAX_POLICY_BYTES
             );
         }
-        let text =
-            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-        Policy::parse(&text)
+        Policy::parse(&read_policy_text(path)?)
     }
 
     pub fn parse(text: &str) -> Result<Policy> {
@@ -1019,6 +1054,23 @@ pub fn templates_for(platform: Platform) -> Vec<(&'static str, &'static str)> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn policy_text_encodings() {
+        let text = "agent: a\n";
+        assert_eq!(decode_policy_bytes(text.as_bytes()).unwrap(), text);
+        let mut bom = vec![0xEF, 0xBB, 0xBF];
+        bom.extend_from_slice(text.as_bytes());
+        assert_eq!(decode_policy_bytes(&bom).unwrap(), text);
+        let mut le = vec![0xFF, 0xFE];
+        le.extend(text.encode_utf16().flat_map(|u| u.to_le_bytes()));
+        assert_eq!(decode_policy_bytes(&le).unwrap(), text);
+        let mut be = vec![0xFE, 0xFF];
+        be.extend(text.encode_utf16().flat_map(|u| u.to_be_bytes()));
+        assert_eq!(decode_policy_bytes(&be).unwrap(), text);
+        assert!(decode_policy_bytes(&[0xFF, 0xFE, 0x61]).is_err());
+    }
+
     use super::*;
 
     #[test]

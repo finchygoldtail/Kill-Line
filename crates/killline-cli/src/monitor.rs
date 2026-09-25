@@ -2,7 +2,7 @@
 
 use crate::launch;
 use crate::views::{self, paint};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::Utc;
 use killline_core::engine::Engine;
 use killline_core::event::{Category, Event, Severity, Verdict};
@@ -90,8 +90,7 @@ fn take_control_request(dir: &std::path::Path) -> Option<String> {
 }
 
 pub fn run(opts: Options) -> Result<i32> {
-    let policy_text = std::fs::read_to_string(&opts.policy)
-        .with_context(|| format!("reading {}", opts.policy.display()))?;
+    let policy_text = killline_core::policy::read_policy_text(&opts.policy)?;
     let policy = Policy::load(&opts.policy)?;
     let compiled = policy.compile()?;
     let response = opts.response.unwrap_or(policy.response.violation);
