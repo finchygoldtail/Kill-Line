@@ -5,6 +5,9 @@ name: release
 # - Pushing a tag like v0.2.0 builds everything and creates a DRAFT release.
 # - Changing this workflow on a branch runs the same pipeline as a dry run
 #   (build + sign, no release) so signing can be tested safely.
+# - Running it by hand (Actions -> release -> Run workflow) with a `tag` builds
+#   the given commit (default: the selected branch) and creates the tag and a
+#   DRAFT release, for when pushing tags is not possible.
 #
 # Signing (details and verification in docs/SIGNING.md):
 # - every file: Sigstore keyless signature (cosign) + GitHub build provenance
@@ -20,6 +23,15 @@ on:
     branches: ["claude/**", "main"]
     paths: [".github/workflows/release.yml"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to create for a draft release, e.g. v0.2.0 (empty = dry run)"
+        required: false
+        default: ""
+      commit:
+        description: "Commit to build and tag (empty = the selected branch)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -32,6 +44,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit || github.sha }}
       - name: Install build dependencies
         run: |
           sudo apt-get update
@@ -73,6 +87,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2" --locked
@@ -183,14 +199,17 @@ jobs:
         with:
           subject-path: "dist/*"
       - name: Draft release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.tag != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          target_commitish: ${{ inputs.commit || github.sha }}
+          name: Kill Line ${{ inputs.tag || github.ref_name }}
           draft: true
           generate_release_notes: true
           files: dist/*
       - name: Keep dry-run output
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') && inputs.tag == '' }}
         uses: actions/upload-artifact@v4
         with:
           name: release-dry-run
