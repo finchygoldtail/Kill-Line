@@ -35,7 +35,7 @@ jobs:
         run: |
           cargo install cargo-cyclonedx --locked
           cargo cyclonedx --format json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: "**/*.cdx.json"
@@ -54,7 +54,7 @@ jobs:
         run: cargo install tauri-cli --version "^2" --locked
       - name: Build .deb and AppImage
         run: desktop/build.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: killline-desktop
           path: |
@@ -81,7 +81,7 @@ jobs:
         env:
           KILLLINE_ETW_PROBE: "1"
         run: python scripts/windows_smoke.py target\release\killline.exe
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: killline-windows-cli
@@ -98,7 +98,7 @@ jobs:
       - name: Build installers (NSIS + MSI)
         shell: pwsh
         run: desktop/build.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: kill-line-windows-installers
           path: |
