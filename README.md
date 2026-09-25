@@ -8,7 +8,7 @@ Kill Line watches an AI agent (a coding agent, research agent, local LLM agent, 
 
 It does not rely on the agent reporting its own actions, on the agent's logs, or on the sandbox's own claim that it is secure.
 
-> **Status: V0.1, a working technical proof on Linux.** It is not a product, not an antivirus and not an EDR. Read [LIMITATIONS](docs/LIMITATIONS.md) before relying on it.
+> **Status: V0.1, a working technical proof on Linux, with a Windows version ([WINDOWS.md](docs/WINDOWS.md)).** It is not a product, not an antivirus and not an EDR. Read [LIMITATIONS](docs/LIMITATIONS.md) before relying on it.
 
 ```
 ════════════════════════════════════════════════════════════

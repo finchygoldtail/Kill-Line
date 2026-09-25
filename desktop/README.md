@@ -32,6 +32,6 @@ For development, run `KILLLINE_BIN=/path/to/killline cargo run` inside `src-taur
 
 ## Not yet
 
-- Windows and macOS. They need their own sensors; see `docs/ROADMAP.md`.
+- macOS. It needs its own sensor; see `docs/ROADMAP.md`. (Windows is supported: see `docs/WINDOWS.md`.)
 - Signed packages and auto-update. Updates will be opt-in and signature-checked.
 - A tray icon with a live status colour.

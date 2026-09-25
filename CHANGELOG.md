@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- `docs/WINDOWS.md`: installing and running Kill Line on Windows.
+- Policy files saved as UTF-16 or with a UTF-8 byte-order mark (Windows PowerShell's defaults) now load.
 - **Licence**: Apache-2.0 (`LICENSE`, `NOTICE`); the in-kernel eBPF program in `bpf/` stays GPL-2.0 (`bpf/LICENSE`).
 - **Windows version**: an ETW sensor (Kernel-Process, Kernel-File, Kernel-Network, DNS-Client) that reports ETW event loss and session loss. Windows-aware policies cover credential stores, Docker named pipes, raw disks and privilege tools, with case-insensitive paths and Windows templates. `killline run` starts the agent suspended until tracking begins. Freeze, resume and terminate use NtSuspendProcess, NtResumeProcess and TerminateProcess. The desktop app requests administrator rights through UAC and ships NSIS and MSI installers. CI runs a real ETW smoke test on Windows. Known Windows gaps (named-pipe opens such as the Docker Engine pipe, command lines, open results) are listed in docs/LIMITATIONS.md.
 - **Release pipeline with signing**: SHA256SUMS, Sigstore keyless signatures and GitHub build-provenance attestations, Authenticode for Windows binaries, installers and scripts, and GPG for Linux files. Certificate and key are optional secrets. See docs/SIGNING.md.
