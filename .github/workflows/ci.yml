@@ -10,7 +10,7 @@ jobs:
   build-test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install BPF toolchain
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang libbpf-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -28,14 +28,14 @@ jobs:
   supply-chain:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
       - uses: dtolnay/rust-toolchain@stable
       - name: SBOM (CycloneDX)
         run: |
           cargo install cargo-cyclonedx --locked
           cargo cyclonedx --format json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: "**/*.cdx.json"
@@ -43,7 +43,7 @@ jobs:
   desktop-linux:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install build dependencies
         run: |
           sudo apt-get update
@@ -54,7 +54,7 @@ jobs:
         run: cargo install tauri-cli --version "^2" --locked
       - name: Build .deb and AppImage
         run: desktop/build.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: killline-desktop
           path: |
@@ -64,7 +64,7 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -81,7 +81,7 @@ jobs:
         env:
           KILLLINE_ETW_PROBE: "1"
         run: python scripts/windows_smoke.py target\release\killline.exe
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: killline-windows-cli
@@ -91,14 +91,14 @@ jobs:
     runs-on: windows-latest
     needs: windows
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2" --locked
       - name: Build installers (NSIS + MSI)
         shell: pwsh
         run: desktop/build.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: kill-line-windows-installers
           path: |

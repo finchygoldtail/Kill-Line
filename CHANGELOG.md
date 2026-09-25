@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Dashboard: the Start monitoring dialog opens on "A process" when Docker is missing or no container is running, and explains how to find a process ID.
 - `docs/WINDOWS.md`: installing and running Kill Line on Windows.
 - Policy files saved as UTF-16 or with a UTF-8 byte-order mark (Windows PowerShell's defaults) now load.
 - **Licence**: Apache-2.0 (`LICENSE`, `NOTICE`); the in-kernel eBPF program in `bpf/` stays GPL-2.0 (`bpf/LICENSE`).

@@ -412,11 +412,16 @@ async function openStart() {
   try {
     if (!templates.length) templates = await api("templates");
     $("template").replaceChildren(...templates.map((t) => h("option", { value: t.name }, t.name)));
-    if (templates.some((t) => t.name === "no-network")) $("template").value = "no-network";
+    const preferred = ["no-network", "windows-no-network"].find((n) => templates.some((t) => t.name === n));
+    if (preferred) $("template").value = preferred;
     onTemplate();
     const c = await api("containers");
     const sel = $("container");
-    if (c.available && c.containers.length) {
+    const haveContainers = c.available && c.containers.length > 0;
+    // Default to what can actually be watched: without running containers
+    // (or without Docker at all, as on most Windows PCs) that is a process.
+    setKind(haveContainers ? "container" : "pid");
+    if (haveContainers) {
       sel.replaceChildren(...c.containers.map((x) => h("option", { value: x.name }, `${x.name}  —  ${x.image}  (${x.status})`)));
       $("container-hint").textContent = "Kill Line watches every process in this container, including ones started later with docker exec.";
     } else {
@@ -424,7 +429,13 @@ async function openStart() {
       $("container-hint").textContent = c.available ? "Start your agent's container first, or watch a process instead." : "Watch a process instead, or install and start Docker.";
     }
   } catch (e) { $("start-error").textContent = e.message; $("start-error").hidden = false; }
-  $("container").focus();
+  ($("kind-pid").checked ? $("pid") : $("container")).focus();
+}
+function setKind(kind) {
+  $("kind-pid").checked = kind === "pid";
+  $("kind-container").checked = kind !== "pid";
+  $("pick-pid").hidden = kind !== "pid";
+  $("pick-container").hidden = kind === "pid";
 }
 function onTemplate() {
   const t = templates.find((x) => x.name === $("template").value);
@@ -447,11 +458,7 @@ async function validatePolicy() {
 $("template").addEventListener("change", onTemplate);
 $("policy-text").addEventListener("input", () => { clearTimeout(validateTimer); validateTimer = setTimeout(validatePolicy, 400); });
 document.querySelectorAll("input[name=kind]").forEach((r) =>
-  r.addEventListener("change", () => {
-    const pid = $("kind-pid").checked;
-    $("pick-pid").hidden = !pid;
-    $("pick-container").hidden = pid;
-  })
+  r.addEventListener("change", () => setKind($("kind-pid").checked ? "pid" : "container"))
 );
 $("btn-start").addEventListener("click", openStart);
 $("btn-start-2").addEventListener("click", openStart);

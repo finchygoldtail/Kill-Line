@@ -19,11 +19,11 @@ hex.workspace = true
 libc.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
-aya = { version = "0.13", default-features = false }
+aya = { version = "0.14", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 ferrisetw = "1.2"
-windows-sys = { version = "0.59", features = [
+windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_Storage_FileSystem",
