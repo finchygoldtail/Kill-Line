@@ -20,6 +20,20 @@ This page lists what Kill Line does not see or cannot guarantee. When a limitati
 | gVisor, Kata, Firecracker, other VM sandboxes | Guest syscalls are invisible to host eBPF | In-guest sensor, or runtime-specific integration |
 | Rootless Docker / Podman, Kubernetes | Not tested in V1 | Roadmap |
 
+## Windows (ETW sensor) gaps
+
+Windows support uses Event Tracing for Windows, which reports less than the Linux eBPF sensor. Each gap below is listed on the session's coverage report.
+
+| Gap | Effect | Planned fix |
+|---|---|---|
+| Named-pipe opens | Opening `\\.\pipe\docker_engine` (or any other named pipe) is **not reported** by the Kernel-File provider, so the container-runtime rule does not fire on Windows. Observed on GitHub's Windows runners | A file-system minifilter or the Kernel-Object provider |
+| Open results | Whether a file open succeeded or was refused is not observed ("result not observed") | Pair with the Kernel-File close/cleanup events |
+| Command lines | Only the program path is recorded, not its arguments | Read the command line from the process (PEB) at start |
+| Token and privilege changes, service creation, driver loads | Seen only as program executions (for example `sc.exe`) | Security-Auditing and Kernel-Audit-API providers |
+| TCP attempts that never complete | Seen only once Windows retries the SYN (about 1 s later) | None needed; the attempt is still recorded |
+
+Kill Line must run as Administrator on Windows.
+
 ## Accuracy limits
 
 - **Detection, not prevention.** Rules fire on syscall *entry*. `freeze`/`terminate` act afterwards, typically within milliseconds. The first violating action is not blocked. Prevention needs BPF-LSM, seccomp or netfilter (Phase 3).

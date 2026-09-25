@@ -18,7 +18,9 @@
 //! monitor can go GREY.
 //!
 //! Known V1 gaps (reported as coverage notes): file-open results, process
-//! command lines, and TCP attempts that never complete are not observed.
+//! command lines and named-pipe opens (for example the Docker Engine pipe)
+//! are not observed. TCP attempts that never complete are seen through the
+//! SYN-retry ("reconnect") events.
 
 use crate::Scope;
 use anyhow::{anyhow, Result};
@@ -570,8 +572,8 @@ impl Sensor {
 
         let coverage = vec![
             CoverageItem { name: "etw/Microsoft-Windows-Kernel-Process".into(), active: true, critical: true, detail: Some("process start/stop; command lines are not captured (V1)".into()) },
-            CoverageItem { name: "etw/Microsoft-Windows-Kernel-File".into(), active: true, critical: true, detail: Some("file create/open, delete, rename; whether an open succeeded is not observed (V1)".into()) },
-            CoverageItem { name: "etw/Microsoft-Windows-Kernel-Network".into(), active: true, critical: true, detail: Some("TCP connections and UDP sends; TCP attempts that never complete may not appear (V1)".into()) },
+            CoverageItem { name: "etw/Microsoft-Windows-Kernel-File".into(), active: true, critical: true, detail: Some("file create/open, delete, rename; whether an open succeeded is not observed, and named-pipe opens (such as the Docker Engine pipe) are not reported by this provider (V1)".into()) },
+            CoverageItem { name: "etw/Microsoft-Windows-Kernel-Network".into(), active: true, critical: true, detail: Some("TCP connections (including attempts that never complete, seen when the SYN is retried) and UDP sends".into()) },
             CoverageItem { name: "etw/Microsoft-Windows-DNS-Client".into(), active: true, critical: false, detail: Some("DNS query names".into()) },
             CoverageItem { name: "privilege and namespace syscalls".into(), active: false, critical: false, detail: Some("not observed on Windows (V1): token changes, service creation and driver loads are only seen as program executions".into()) },
         ];
