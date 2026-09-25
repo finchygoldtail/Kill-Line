@@ -29,7 +29,7 @@ on:
         required: false
         default: ""
       commit:
-        description: "Commit to build and tag (empty = the selected branch)"
+        description: "Full commit SHA to build and tag (empty = the selected branch)"
         required: false
         default: ""
 
@@ -198,6 +198,23 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: "dist/*"
+      - name: Create the tag (manual runs)
+        # A tag created with GITHUB_TOKEN does not start another workflow run,
+        # so publishing the draft later does not rebuild it or turn it back
+        # into a draft.
+        if: inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          SHA: ${{ inputs.commit || github.sha }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || { echo "tag must look like v1.2.3"; exit 1; }
+          if gh api "repos/$REPO/git/ref/tags/$TAG" > /dev/null 2>&1; then
+            echo "Tag $TAG already exists."
+          else
+            gh api "repos/$REPO/git/refs" -f ref="refs/tags/$TAG" -f sha="$SHA"
+          fi
       - name: Draft release
         if: startsWith(github.ref, 'refs/tags/v') || inputs.tag != ''
         uses: softprops/action-gh-release@v2
