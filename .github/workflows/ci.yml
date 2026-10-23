@@ -74,7 +74,7 @@ jobs:
         run: cargo test -p killline-core --locked
       - name: Build the engine
         run: cargo build --release --locked -p killline-cli
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: ETW smoke test (runner is Administrator)
